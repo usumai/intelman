@@ -1,0 +1,72 @@
+{% extends 'base.html' %}
+
+{% block title %}Chat with LLM - My App{% endblock %}
+
+{% block content %}
+<div id="chatApp">
+  <h1>Chat with LLM</h1>
+  <div id="conversation" style="max-height: 400px; overflow-y: auto; border: 1px solid #ccc; padding: 10px;">
+    {% raw %}
+    <div v-for="(message, index) in messages" :key="index" :class="{'text-end': message.role==='assistant'}">
+      <p><strong>{{ message.role }}:</strong> {{ message.content }}</p>
+    </div>
+    {% endraw %}
+  </div>
+  <div class="mt-3">
+    <input type="text" v-model="newPrompt" class="form-control" placeholder="Type your message">
+  </div>
+  <div class="mt-2">
+    <button class="btn btn-primary" @click="sendMessage" :disabled="!newPrompt">Send</button>
+  </div>
+  <div class="mt-3" v-if="error">
+    <div class="alert alert-danger" role="alert" v-text="error"></div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{% raw %}
+<script>
+  const { createApp } = Vue;
+  createApp({
+    data() {
+      return {
+        messages: [],
+        newPrompt: '',
+        error: ''
+      }
+    },
+    methods: {
+      async sendMessage() {
+        // Add the new user prompt to the conversation history
+        this.messages.push({ role: 'user', content: this.newPrompt });
+        const payload = { messages: this.messages };
+        try {
+          const response = await fetch('/api/llm/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+          const data = await response.json();
+          if (response.ok) {
+            // Assuming the LLM returns a response in data.choices[0].message
+            if (data.choices && data.choices.length > 0) {
+              const assistantMsg = data.choices[0].message;
+              this.messages.push(assistantMsg);
+            } else {
+              this.error = 'No response received from LLM.';
+            }
+          } else {
+            this.error = data.error || 'LLM request failed.';
+          }
+        } catch (err) {
+          console.error('LLM request error:', err);
+          this.error = 'An error occurred while sending your message.';
+        }
+        this.newPrompt = '';
+      }
+    }
+  }).mount('#chatApp');
+</script>
+{% endraw %}
+{% endblock %}

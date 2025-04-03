@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}My App{% endblock %}</title>
+    <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='images/favicon.ico') }}">
+    <!-- Local Bootstrap CSS -->
+    <link href="{{ url_for('static', filename='css/bootstrap.min.css') }}" rel="stylesheet">
+    <!-- Local Vue.js (Vue 3) -->
+    <script src="{{ url_for('static', filename='js/vue.global.js') }}"></script>
+  </head>
+  <body>
+    <!-- Common Menu -->
+    {% include 'menu.html' %}
+    
+    <!-- Page-specific Content -->
+    <div class="container mt-5">
+      {% block content %}{% endblock %}
+    </div>
+    
+    <!-- Local Bootstrap Bundle with Popper -->
+    <script src="{{ url_for('static', filename='js/bootstrap.bundle.min.js') }}"></script>
+    {% block scripts %}{% endblock %}
+  </body>
+</html>

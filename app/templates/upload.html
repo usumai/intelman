@@ -1,0 +1,65 @@
+{% extends 'base.html' %}
+
+{% block title %}Upload - My App{% endblock %}
+
+{% block content %}
+  <div id="uploadApp">
+    <h1>Upload Document for Conversion</h1>
+    <div class="mb-3">
+      <input type="file" class="form-control" @change="onFileChange">
+    </div>
+    <button class="btn btn-primary" @click="uploadFile" :disabled="!file">Upload</button>
+    <div class="mt-4" v-if="result">
+      <h3>Converted Markdown</h3>
+      <pre v-text="result"></pre>
+    </div>
+    <div class="mt-4" v-if="error">
+      <div class="alert alert-danger" role="alert" v-text="error"></div>
+    </div>
+  </div>
+{% endblock %}
+
+{% block scripts %}
+  <script>
+    const { createApp } = Vue;
+    createApp({
+      data() {
+        return {
+          file: null,
+          result: '',
+          error: ''
+        }
+      },
+      methods: {
+        onFileChange(event) {
+          this.file = event.target.files[0];
+        },
+        async uploadFile() {
+          if (!this.file) {
+            this.error = 'Please select a file.';
+            return;
+          }
+          this.error = '';
+          const formData = new FormData();
+          formData.append('file', this.file);
+          try {
+            const response = await fetch('/api/upload/', {
+              method: 'POST',
+              body: formData
+            });
+            const data = await response.json();
+            console.log('Upload response:', data);
+            if (response.ok) {
+              this.result = data.result;
+            } else {
+              this.error = data.error || 'Upload failed';
+            }
+          } catch (err) {
+            console.error('Upload error:', err);
+            this.error = 'An error occurred while uploading.';
+          }
+        }
+      }
+    }).mount('#uploadApp');
+  </script>
+{% endblock %}

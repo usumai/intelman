@@ -1,0 +1,16 @@
+{% extends 'base.html' %}
+
+{% block title %}Events - My App{% endblock %}
+
+{% block content %}
+  <div id="eventBrowser">
+    <h1>Event history browser</h1>
+  </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const { createApp } = Vue;
+  createApp({}).mount('#eventBrowser');
+</script>
+{% endblock %}

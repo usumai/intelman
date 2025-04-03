@@ -1,22 +1,27 @@
-# Use the official Python slim image as the base image
-FROM python:3.9-slim
+FROM python:3.10-slim
 
-# Set a label for the image (optional)
-LABEL maintainer="your_email@example.com" \
-      app="intelman"
+# Install required system dependencies
+RUN apt-get update && apt-get install -y git ffmpeg postgresql-client
 
-# Set the working directory inside the container
+
 WORKDIR /app
 
-# Copy the dependency file and install required packages
+# Copy the requirements file and install Python dependencies
 COPY requirements.txt .
 RUN pip install --upgrade pip && pip install -r requirements.txt
 
-# Copy the rest of your application code into the container
+# Clone the markitdown repository and install it
+RUN git clone https://github.com/microsoft/markitdown.git /tmp/markitdown
+RUN pip install -e /tmp/markitdown/packages/markitdown[all]
+
+# Copy the wait-for-db script from the app folder and make it executable
+COPY wait-for-db.sh /app/wait-for-db.sh
+RUN chmod +x /app/wait-for-db.sh
+
+# Copy your application code into the container
 COPY . .
 
-# Expose the port that the Flask app runs on
 EXPOSE 5000
 
-# Set the default command to run your Flask app from the app folder
-CMD ["python", "app/app.py"]
+# Use the wait-for-db script to ensure the PostgreSQL service is up before starting the app
+CMD ["/app/wait-for-db.sh", "db", "python", "app/app.py"]
