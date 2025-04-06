@@ -1,0 +1,100 @@
+<!-- app/static/upload.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Upload - My App</title>
+  <link rel="icon" type="image/x-icon" href="images/favicon.ico">
+  <link href="css/bootstrap.min.css" rel="stylesheet">
+  <script src="js/vue.global.js"></script>
+</head>
+<body>
+  <!-- Navbar -->
+  <nav class="navbar navbar-expand-lg navbar-light bg-light">
+    <div class="container-fluid">
+      <a class="navbar-brand" href="index.html">My App</a>
+      <div class="collapse navbar-collapse">
+        <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+          <li class="nav-item">
+            <a class="nav-link" href="index.html">Home</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="upload.html">Upload</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="events.html">Events</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="browse.html">Files</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="dbexplorer.html">Database Explorer</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="llm.html">Chat with LLM</a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container mt-5" id="uploadApp">
+    <h1>Upload Document for Conversion</h1>
+    <div class="mb-3">
+      <input type="file" class="form-control" @change="onFileChange">
+    </div>
+    <button class="btn btn-primary" @click="uploadFile" :disabled="!file">Upload</button>
+    <div class="mt-4" v-if="result">
+      <h3>Converted Markdown</h3>
+      <pre>{{ result }}</pre>
+    </div>
+    <div class="mt-4" v-if="error">
+      <div class="alert alert-danger" role="alert">{{ error }}</div>
+    </div>
+  </div>
+
+  <script>
+    const { createApp } = Vue;
+    createApp({
+      data() {
+        return {
+          file: null,
+          result: '',
+          error: ''
+        }
+      },
+      methods: {
+        onFileChange(event) {
+          this.file = event.target.files[0];
+        },
+        async uploadFile() {
+          if (!this.file) {
+            this.error = 'Please select a file.';
+            return;
+          }
+          this.error = '';
+          const formData = new FormData();
+          formData.append('file', this.file);
+          try {
+            const response = await fetch('/api/upload/', {
+              method: 'POST',
+              body: formData
+            });
+            const data = await response.json();
+            if (response.ok) {
+              // 'markdown' is returned by the API
+              this.result = data.markdown;
+            } else {
+              this.error = data.error || 'Upload failed';
+            }
+          } catch (err) {
+            console.error('Upload error:', err);
+            this.error = 'An error occurred while uploading.';
+          }
+        }
+      }
+    }).mount('#uploadApp');
+  </script>
+  <script src="js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

@@ -1,0 +1,52 @@
+<!-- app/static/events.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Events - My App</title>
+  <link rel="icon" type="image/x-icon" href="images/favicon.ico">
+  <link href="css/bootstrap.min.css" rel="stylesheet">
+  <script src="js/vue.global.js"></script>
+</head>
+<body>
+  <!-- Navbar -->
+  <nav class="navbar navbar-expand-lg navbar-light bg-light">
+    <div class="container-fluid">
+      <a class="navbar-brand" href="index.html">My App</a>
+      <div class="collapse navbar-collapse">
+        <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+          <li class="nav-item">
+            <a class="nav-link" href="index.html">Home</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="upload.html">Upload</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="events.html">Events</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="browse.html">Files</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="dbexplorer.html">Database Explorer</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="llm.html">Chat with LLM</a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container mt-5" id="eventBrowser">
+    <h1>Event History Browser</h1>
+    <!-- Add your event-browsing UI or logic here -->
+  </div>
+
+  <script>
+    const { createApp } = Vue;
+    createApp({}).mount('#eventBrowser');
+  </script>
+  <script src="js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
