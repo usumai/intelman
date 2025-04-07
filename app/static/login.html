@@ -1,4 +1,4 @@
-<!-- app/static/login.html -->
+<!-- /app/static/login.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -9,38 +9,20 @@
   <script src="js/vue.global.js"></script>
 </head>
 <body>
-  <!-- Navbar -->
-  <nav class="navbar navbar-expand-lg navbar-light bg-light">
-    <div class="container-fluid">
-      <a class="navbar-brand" href="index.html">My App</a>
-      <div class="collapse navbar-collapse">
-        <ul class="navbar-nav me-auto mb-2 mb-lg-0">
-          <li class="nav-item">
-            <a class="nav-link" href="index.html">Home</a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="upload.html">Upload</a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="events.html">Events</a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="browse.html">Files</a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="dbexplorer.html">Database Explorer</a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="llm.html">Chat with LLM</a>
-          </li>
-        </ul>
-      </div>
-    </div>
-  </nav>
+
+  <div id="menu"></div>
+  <script type="module">
+    import { renderMenu } from './js/menu.js';
+    renderMenu();
+  </script>
 
   <div class="container mt-5" id="loginApp">
     <h2>Login</h2>
     <div class="alert alert-danger" v-if="error">{{ error }}</div>
+    <div class="mb-3">
+      <label for="username" class="form-label">Username</label>
+      <input type="text" class="form-control" id="username" v-model="username">
+    </div>
     <div class="mb-3">
       <label for="password" class="form-label">Password</label>
       <input type="password" class="form-control" id="password" v-model="password">
@@ -53,18 +35,34 @@
     createApp({
       data() {
         return {
+          username: '',
           password: '',
           error: ''
         }
       },
       methods: {
-        attemptLogin() {
-          // In a real-world FastAPI app, you'd do an API call:
-          // fetch('/api/auth/login', { ... })
-          if (this.password === 'dlpeye') {
-            window.location.href = 'index.html';
-          } else {
-            this.error = 'Incorrect password. Please try again.';
+        async attemptLogin() {
+          const formData = new URLSearchParams();
+          formData.append('username', this.username);
+          formData.append('password', this.password);
+
+          try {
+            const response = await fetch('/api/login/login', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+              body: formData
+            });
+            const data = await response.json();
+            if (response.ok) {
+              // Store token (in localStorage, cookies, etc.) and redirect
+              localStorage.setItem('access_token', data.access_token);
+              window.location.href = 'index.html';
+            } else {
+              this.error = data.detail || 'Login failed.';
+            }
+          } catch (err) {
+            console.error(err);
+            this.error = 'An error occurred while logging in.';
           }
         }
       }

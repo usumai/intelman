@@ -4,6 +4,7 @@ fastapi==0.95.0
 uvicorn==0.21.1
 psycopg2-binary==2.9.6
 requests==2.28.2  # if you still use 'requests' in llm.py
+passlib[bcrypt]==1.7.4
 
 
 wait-for-db.sh:
@@ -92,7 +93,7 @@ DATABASE_URL = os.environ.get('DATABASE_URL', f"sqlite:///{os.path.join(BASE_DIR
 
 
 /app/main.py:
-# app/main.py
+# /app/main.py
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
@@ -103,17 +104,15 @@ from .routers.browse import router as browse_router
 from .routers.upload import router as upload_router
 from .routers.llm import router as llm_router
 from .routers.dbexplorer import router as dbexplorer_router
+from .routers.login import router as login_router  # newly added
 
 app.include_router(browse_router, prefix="/api/browse")
 app.include_router(upload_router, prefix="/api/upload")
 app.include_router(llm_router, prefix="/api/llm")
 app.include_router(dbexplorer_router, prefix="/api/dbexplorer")
-
-
-
+app.include_router(login_router, prefix="/api/login")  # add login endpoints
 
 # Mount the static folder at the root.
-# The html=True flag makes index.html the default file.
 app.mount("/", StaticFiles(directory="app/static", html=True), name="static")
 
 
@@ -314,32 +313,69 @@ def get_table_snapshot(table_name: str):
             conn.close()
 
 
-/app/db-init/init.sql:
-CREATE TABLE IF NOT EXISTS intel_L100_files (
-  file_id SERIAL PRIMARY KEY,
-  create_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  create_user VARCHAR(50) NOT NULL,
-  delete_date TIMESTAMP,
-  delete_user VARCHAR(50),
-  uploaded_file_name VARCHAR(255) NOT NULL,
-  file_name VARCHAR(255) NOT NULL,
-  file_description TEXT,
-  file_series INTEGER, -- This is a foreign key; update the reference if you have a series table
-  fingerprint VARCHAR(255),
-  description TEXT,
-  metad_create_date TIMESTAMP,
-  metad_edit_date TIMESTAMP,
-  markdown_extract TEXT,
-  status VARCHAR(50)
-  -- Uncomment and adjust the next line if you have a referenced table for file_series:
-  --, FOREIGN KEY (file_series) REFERENCES file_series(file_series_id)
-);
+/app/routers/login.py:
+# /app/routers/login.py
+from fastapi import APIRouter, HTTPException, Depends
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from datetime import datetime, timedelta
+from typing import Optional
+import jwt
+from passlib.context import CryptContext
 
+router = APIRouter(tags=["login"])
 
+# In-memory "database" of users (replace with your actual user database)
+fake_users_db = {
+    "test_user": {
+        "username": "test_user",
+        "hashed_password": "$2b$12$KIX8F1Wc2wPFh8r9JtWnjeQwgE./vOVnD0nUHRjdS71/teWDH9Q5K",  # hash for 'dlpeye'
+    }
+}
+
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+SECRET_KEY = "your_secret_key_here"  # Replace with a secure key
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 30
+
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    return pwd_context.verify(plain_password, hashed_password)
+
+def get_user(username: str):
+    user = fake_users_db.get(username)
+    return user
+
+def authenticate_user(username: str, password: str):
+    user = get_user(username)
+    if not user or not verify_password(password, user["hashed_password"]):
+        return None
+    return user
+
+def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
+    to_encode = data.copy()
+    expire = datetime.utcnow() + (expires_delta or timedelta(minutes=15))
+    to_encode.update({"exp": expire})
+    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+
+@router.post("/login")
+def login(form_data: OAuth2PasswordRequestForm = Depends()):
+    user = authenticate_user(form_data.username, form_data.password)
+    if not user:
+        raise HTTPException(status_code=400, detail="Incorrect username or password")
+    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = create_access_token(
+        data={"sub": user["username"]}, expires_delta=access_token_expires
+    )
+    return {"access_token": access_token, "token_type": "bearer"}
+
+# Optionally, add a logout endpoint if using cookies/sessions
+@router.post("/logout")
+def logout():
+    # In a token-based system, logout is typically handled on the client side by discarding the token.
+    return {"message": "Logout successful"}
 
 
 /app/static/index.html:
-<!-- app/static/index.html -->
+<!-- index.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -350,34 +386,12 @@ CREATE TABLE IF NOT EXISTS intel_L100_files (
   <script src="js/vue.global.js"></script>
 </head>
 <body>
-  <!-- A simple navbar with links to other pages -->
-  <nav class="navbar navbar-expand-lg navbar-light bg-light">
-    <div class="container-fluid">
-      <a class="navbar-brand" href="index.html">My App</a>
-      <div class="collapse navbar-collapse">
-        <ul class="navbar-nav me-auto mb-2 mb-lg-0">
-          <li class="nav-item">
-            <a class="nav-link" href="index.html">Home</a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="upload.html">Upload</a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="events.html">Events</a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="browse.html">Files</a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="dbexplorer.html">Database Explorer</a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="llm.html">Chat with LLM</a>
-          </li>
-        </ul>
-      </div>
-    </div>
-  </nav>
+  <div id="menu"></div>
+  <script type="module">
+    import { renderMenu } from './js/menu.js';
+    renderMenu();
+  </script>
+  
 
   <div class="container mt-5" id="homeApp">
     <h1>Welcome to My App</h1>
@@ -405,34 +419,12 @@ CREATE TABLE IF NOT EXISTS intel_L100_files (
   <script src="js/vue.global.js"></script>
 </head>
 <body>
-  <!-- Navbar -->
-  <nav class="navbar navbar-expand-lg navbar-light bg-light">
-    <div class="container-fluid">
-      <a class="navbar-brand" href="index.html">My App</a>
-      <div class="collapse navbar-collapse">
-        <ul class="navbar-nav me-auto mb-2 mb-lg-0">
-          <li class="nav-item">
-            <a class="nav-link" href="index.html">Home</a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="upload.html">Upload</a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="events.html">Events</a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="browse.html">Files</a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="dbexplorer.html">Database Explorer</a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="llm.html">Chat with LLM</a>
-          </li>
-        </ul>
-      </div>
-    </div>
-  </nav>
+
+  <div id="menu"></div>
+  <script type="module">
+    import { renderMenu } from './js/menu.js';
+    renderMenu();
+  </script>
 
   <div class="container mt-5" id="browseApp">
     <h1>Uploaded Files</h1>
@@ -469,45 +461,8 @@ CREATE TABLE IF NOT EXISTS intel_L100_files (
 </html>
 
 
-/app/static/menu.html:
-<!-- /app/templates/menu.html -->
-<nav class="navbar navbar-expand-lg navbar-light bg-light">
-  <div class="container-fluid">
-    <a class="navbar-brand" href="{{ url_for('pages.home') }}">My App</a>
-    <div class="collapse navbar-collapse">
-      <ul class="navbar-nav me-auto mb-2 mb-lg-0">
-        <li class="nav-item">
-          <a class="nav-link" href="{{ url_for('pages.home') }}">Home</a>
-        </li>
-        <li class="nav-item">
-          <a class="nav-link" href="/upload.html">Upload</a>
-        </li>
-        <li class="nav-item">
-          <a class="nav-link" href="/events.html">Events</a>
-        </li>
-        <li class="nav-item">
-          <a class="nav-link" href="/browse.html">Files</a>
-        </li>
-        <li class="nav-item">
-          <a class="nav-link" href="{{ url_for('dbexplorer.explorer') }}">Database Explorer</a>
-        </li>
-        <li class="nav-item">
-          <a class="nav-link" href="llm.html">Chat with LLM</a>
-        </li>
-      </ul>
-      <!-- Add a Logout link -->
-      <ul class="navbar-nav">
-        <li class="nav-item">
-          <a class="nav-link" href="{{ url_for('login.logout') }}">Logout</a>
-        </li>
-      </ul>
-    </div>
-  </div>
-</nav>
-
-
 /app/static/login.html:
-<!-- app/static/login.html -->
+<!-- /app/static/login.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -518,38 +473,20 @@ CREATE TABLE IF NOT EXISTS intel_L100_files (
   <script src="js/vue.global.js"></script>
 </head>
 <body>
-  <!-- Navbar -->
-  <nav class="navbar navbar-expand-lg navbar-light bg-light">
-    <div class="container-fluid">
-      <a class="navbar-brand" href="index.html">My App</a>
-      <div class="collapse navbar-collapse">
-        <ul class="navbar-nav me-auto mb-2 mb-lg-0">
-          <li class="nav-item">
-            <a class="nav-link" href="index.html">Home</a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="upload.html">Upload</a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="events.html">Events</a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="browse.html">Files</a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="dbexplorer.html">Database Explorer</a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="llm.html">Chat with LLM</a>
-          </li>
-        </ul>
-      </div>
-    </div>
-  </nav>
+
+  <div id="menu"></div>
+  <script type="module">
+    import { renderMenu } from './js/menu.js';
+    renderMenu();
+  </script>
 
   <div class="container mt-5" id="loginApp">
     <h2>Login</h2>
     <div class="alert alert-danger" v-if="error">{{ error }}</div>
+    <div class="mb-3">
+      <label for="username" class="form-label">Username</label>
+      <input type="text" class="form-control" id="username" v-model="username">
+    </div>
     <div class="mb-3">
       <label for="password" class="form-label">Password</label>
       <input type="password" class="form-control" id="password" v-model="password">
@@ -562,18 +499,34 @@ CREATE TABLE IF NOT EXISTS intel_L100_files (
     createApp({
       data() {
         return {
+          username: '',
           password: '',
           error: ''
         }
       },
       methods: {
-        attemptLogin() {
-          // In a real-world FastAPI app, you'd do an API call:
-          // fetch('/api/auth/login', { ... })
-          if (this.password === 'dlpeye') {
-            window.location.href = 'index.html';
-          } else {
-            this.error = 'Incorrect password. Please try again.';
+        async attemptLogin() {
+          const formData = new URLSearchParams();
+          formData.append('username', this.username);
+          formData.append('password', this.password);
+
+          try {
+            const response = await fetch('/api/login/login', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+              body: formData
+            });
+            const data = await response.json();
+            if (response.ok) {
+              // Store token (in localStorage, cookies, etc.) and redirect
+              localStorage.setItem('access_token', data.access_token);
+              window.location.href = 'index.html';
+            } else {
+              this.error = data.detail || 'Login failed.';
+            }
+          } catch (err) {
+            console.error(err);
+            this.error = 'An error occurred while logging in.';
           }
         }
       }
@@ -596,34 +549,12 @@ CREATE TABLE IF NOT EXISTS intel_L100_files (
   <script src="js/vue.global.js"></script>
 </head>
 <body>
-  <!-- Navbar -->
-  <nav class="navbar navbar-expand-lg navbar-light bg-light">
-    <div class="container-fluid">
-      <a class="navbar-brand" href="index.html">My App</a>
-      <div class="collapse navbar-collapse">
-        <ul class="navbar-nav me-auto mb-2 mb-lg-0">
-          <li class="nav-item">
-            <a class="nav-link" href="index.html">Home</a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="upload.html">Upload</a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="events.html">Events</a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="browse.html">Files</a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link active" href="dbexplorer.html">Database Explorer</a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="llm.html">Chat with LLM</a>
-          </li>
-        </ul>
-      </div>
-    </div>
-  </nav>
+
+  <div id="menu"></div>
+  <script type="module">
+    import { renderMenu } from './js/menu.js';
+    renderMenu();
+  </script>
 
   <div class="container mt-5" id="dbExplorerApp">
     <h1>Database Explorer</h1>
@@ -748,34 +679,11 @@ CREATE TABLE IF NOT EXISTS intel_L100_files (
   <script src="js/vue.global.js"></script>
 </head>
 <body>
-  <!-- Navbar -->
-  <nav class="navbar navbar-expand-lg navbar-light bg-light">
-    <div class="container-fluid">
-      <a class="navbar-brand" href="index.html">My App</a>
-      <div class="collapse navbar-collapse">
-        <ul class="navbar-nav me-auto mb-2 mb-lg-0">
-          <li class="nav-item">
-            <a class="nav-link" href="index.html">Home</a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="upload.html">Upload</a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="events.html">Events</a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="browse.html">Files</a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="dbexplorer.html">Database Explorer</a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="llm.html">Chat with LLM</a>
-          </li>
-        </ul>
-      </div>
-    </div>
-  </nav>
+  <div id="menu"></div>
+  <script type="module">
+    import { renderMenu } from './js/menu.js';
+    renderMenu();
+  </script>
 
   <div class="container mt-5" id="chatApp">
     <h1>Chat with LLM</h1>
@@ -856,34 +764,11 @@ CREATE TABLE IF NOT EXISTS intel_L100_files (
   <script src="js/vue.global.js"></script>
 </head>
 <body>
-  <!-- Navbar -->
-  <nav class="navbar navbar-expand-lg navbar-light bg-light">
-    <div class="container-fluid">
-      <a class="navbar-brand" href="index.html">My App</a>
-      <div class="collapse navbar-collapse">
-        <ul class="navbar-nav me-auto mb-2 mb-lg-0">
-          <li class="nav-item">
-            <a class="nav-link" href="index.html">Home</a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="upload.html">Upload</a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="events.html">Events</a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="browse.html">Files</a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="dbexplorer.html">Database Explorer</a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="llm.html">Chat with LLM</a>
-          </li>
-        </ul>
-      </div>
-    </div>
-  </nav>
+  <div id="menu"></div>
+  <script type="module">
+    import { renderMenu } from './js/menu.js';
+    renderMenu();
+  </script>
 
   <div class="container mt-5" id="eventBrowser">
     <h1>Event History Browser</h1>
@@ -911,34 +796,12 @@ CREATE TABLE IF NOT EXISTS intel_L100_files (
   <script src="js/vue.global.js"></script>
 </head>
 <body>
-  <!-- Navbar -->
-  <nav class="navbar navbar-expand-lg navbar-light bg-light">
-    <div class="container-fluid">
-      <a class="navbar-brand" href="index.html">My App</a>
-      <div class="collapse navbar-collapse">
-        <ul class="navbar-nav me-auto mb-2 mb-lg-0">
-          <li class="nav-item">
-            <a class="nav-link" href="index.html">Home</a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="upload.html">Upload</a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="events.html">Events</a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="browse.html">Files</a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="dbexplorer.html">Database Explorer</a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="llm.html">Chat with LLM</a>
-          </li>
-        </ul>
-      </div>
-    </div>
-  </nav>
+
+  <div id="menu"></div>
+  <script type="module">
+    import { renderMenu } from './js/menu.js';
+    renderMenu();
+  </script>
 
   <div class="container mt-5" id="uploadApp">
     <h1>Upload Document for Conversion</h1>
@@ -1012,6 +875,9 @@ Error reading file: 'utf-8' codec can't decode byte 0x96 in position 50: invalid
 [Library file content skipped]
 
 /app/static/js/vue.global.js:
+[Library file content skipped]
+
+/app/static/js/menu.js:
 [Library file content skipped]
 
 /app/services/file_storage_service.py:
@@ -1089,5 +955,29 @@ def update_file_record(file_id, file_name, markdown_extract):
         raise e
     finally:
         conn.close()
+
+
+/db-init/init.sql:
+CREATE TABLE IF NOT EXISTS intel_L100_files (
+  file_id SERIAL PRIMARY KEY,
+  create_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  create_user VARCHAR(50) NOT NULL,
+  delete_date TIMESTAMP,
+  delete_user VARCHAR(50),
+  uploaded_file_name VARCHAR(255) NOT NULL,
+  file_name VARCHAR(255) NOT NULL,
+  file_description TEXT,
+  file_series INTEGER, -- This is a foreign key; update the reference if you have a series table
+  fingerprint VARCHAR(255),
+  description TEXT,
+  metad_create_date TIMESTAMP,
+  metad_edit_date TIMESTAMP,
+  markdown_extract TEXT,
+  status VARCHAR(50)
+  -- Uncomment and adjust the next line if you have a referenced table for file_series:
+  --, FOREIGN KEY (file_series) REFERENCES file_series(file_series_id)
+);
+
+
 
 
