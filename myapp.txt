@@ -242,33 +242,76 @@ def query_llm(data: LLMRequest):
 from fastapi import APIRouter, HTTPException
 import psycopg2
 from psycopg2.extras import RealDictCursor
+from psycopg2 import sql
 from ..config import DATABASE_URL
 
 router = APIRouter(tags=["dbexplorer"])
 
-
-@router.get("/")
-def explore():
+@router.get("/tables")
+def list_tables():
+    """
+    Return a list of table names from the public schema.
+    """
     conn = None
-    data = {"users": [], "posts": []}
     try:
         conn = psycopg2.connect(DATABASE_URL)
         cur = conn.cursor(cursor_factory=RealDictCursor)
-
-        cur.execute("SELECT * FROM users;")
-        data["users"] = cur.fetchall()
-
-        cur.execute("SELECT * FROM posts;")
-        data["posts"] = cur.fetchall()
-
+        cur.execute(
+            """
+            SELECT table_name 
+            FROM information_schema.tables 
+            WHERE table_schema = 'public' AND table_type = 'BASE TABLE';
+            """
+        )
+        tables = [row["table_name"] for row in cur.fetchall()]
         cur.close()
+        return {"tables": tables}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         if conn:
             conn.close()
 
-    return data
+
+@router.get("/table/{table_name}")
+def get_table_snapshot(table_name: str):
+    """
+    Returns a snapshot of a given table. The response contains:
+      - "columns": list of column names,
+      - "records": up to 10 rows of data from the table.
+    """
+    conn = None
+    try:
+        conn = psycopg2.connect(DATABASE_URL)
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+
+        # Validate that the table exists in the public schema.
+        cur.execute(
+            """
+            SELECT table_name 
+            FROM information_schema.tables 
+            WHERE table_schema = 'public' AND table_name = %s;
+            """,
+            (table_name,),
+        )
+        if not cur.fetchone():
+            raise HTTPException(status_code=404, detail="Table not found")
+
+        # Build a safe query using psycopg2.sql to avoid SQL injection.
+        query = sql.SQL("SELECT * FROM {} LIMIT 10;").format(sql.Identifier(table_name))
+        cur.execute(query)
+        records = cur.fetchall()
+
+        # Extract column names from the cursor description.
+        columns = [desc.name for desc in cur.description] if cur.description else []
+        cur.close()
+
+        return {"columns": columns, "records": records}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn:
+            conn.close()
 
 
 /app/db-init/init.sql:
@@ -572,7 +615,7 @@ CREATE TABLE IF NOT EXISTS intel_L100_files (
             <a class="nav-link" href="browse.html">Files</a>
           </li>
           <li class="nav-item">
-            <a class="nav-link" href="dbexplorer.html">Database Explorer</a>
+            <a class="nav-link active" href="dbexplorer.html">Database Explorer</a>
           </li>
           <li class="nav-item">
             <a class="nav-link" href="llm.html">Chat with LLM</a>
@@ -584,43 +627,47 @@ CREATE TABLE IF NOT EXISTS intel_L100_files (
 
   <div class="container mt-5" id="dbExplorerApp">
     <h1>Database Explorer</h1>
+    
+    <!-- Button to refresh table list -->
+    <button class="btn btn-secondary mb-3" @click="fetchTables">Refresh Tables</button>
+    
+    <h2>Tables</h2>
+    <ul class="list-group mb-4">
+      <li 
+        class="list-group-item list-group-item-action" 
+        v-for="(table, index) in tables" 
+        :key="index"
+        @click="fetchTableSnapshot(table)"
+        style="cursor: pointer;"
+      >
+        {{ table }}
+      </li>
+      <li class="list-group-item" v-if="tables.length === 0">
+        No tables found.
+      </li>
+    </ul>
 
-    <button class="btn btn-secondary mb-3" @click="fetchDB">Refresh Data</button>
+    <!-- Table Snapshot Section -->
+    <div v-if="selectedTable">
+      <h2>Snapshot of Table: <em>{{ selectedTable }}</em></h2>
+      <table class="table table-striped" v-if="tableSnapshot.records.length > 0">
+        <thead>
+          <tr>
+            <th v-for="col in tableSnapshot.columns" :key="col">{{ col }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="(row, index) in tableSnapshot.records" :key="index">
+            <td v-for="col in tableSnapshot.columns" :key="col">{{ row[col] }}</td>
+          </tr>
+        </tbody>
+      </table>
+      <div v-else>
+        <p>No records found in this table.</p>
+      </div>
+    </div>
 
-    <h2>Users</h2>
-    <table class="table table-striped">
-      <thead>
-        <tr>
-          <th v-for="key in userKeys" :key="key">{{ key }}</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr v-for="(user, index) in users" :key="index">
-          <td v-for="key in userKeys" :key="key">{{ user[key] }}</td>
-        </tr>
-        <tr v-if="users.length === 0">
-          <td colspan="99">No users found.</td>
-        </tr>
-      </tbody>
-    </table>
-
-    <h2>Posts</h2>
-    <table class="table table-striped">
-      <thead>
-        <tr>
-          <th v-for="key in postKeys" :key="key">{{ key }}</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr v-for="(post, index) in posts" :key="index">
-          <td v-for="key in postKeys" :key="key">{{ post[key] }}</td>
-        </tr>
-        <tr v-if="posts.length === 0">
-          <td colspan="99">No posts found.</td>
-        </tr>
-      </tbody>
-    </table>
-
+    <!-- Error message -->
     <div class="alert alert-danger" v-if="error">{{ error }}</div>
   </div>
 
@@ -629,36 +676,58 @@ CREATE TABLE IF NOT EXISTS intel_L100_files (
     createApp({
       data() {
         return {
-          users: [],
-          posts: [],
+          tables: [],
+          selectedTable: '',
+          tableSnapshot: {
+            columns: [],
+            records: []
+          },
           error: ''
         }
       },
-      computed: {
-        userKeys() {
-          return this.users.length > 0 ? Object.keys(this.users[0]) : [];
-        },
-        postKeys() {
-          return this.posts.length > 0 ? Object.keys(this.posts[0]) : [];
-        }
-      },
       methods: {
-        fetchDB() {
+        fetchTables() {
           this.error = '';
-          fetch('/api/dbexplorer/')
-            .then(resp => resp.json())
+          this.tables = [];
+          // Fetch the list of tables from the new endpoint
+          fetch('/api/dbexplorer/tables')
+            .then(resp => {
+              if (!resp.ok) {
+                throw new Error("Failed to fetch tables.");
+              }
+              return resp.json();
+            })
             .then(data => {
-              this.users = data.users || [];
-              this.posts = data.posts || [];
+              this.tables = data.tables || [];
             })
             .catch(err => {
               console.error(err);
-              this.error = 'Error fetching database data.';
+              this.error = 'Error fetching table list.';
+            });
+        },
+        fetchTableSnapshot(table) {
+          this.error = '';
+          this.selectedTable = table;
+          this.tableSnapshot = { columns: [], records: [] };
+          // Fetch the snapshot for the selected table
+          fetch(`/api/dbexplorer/table/${table}`)
+            .then(resp => {
+              if (!resp.ok) {
+                throw new Error("Failed to fetch table snapshot.");
+              }
+              return resp.json();
+            })
+            .then(data => {
+              this.tableSnapshot = data;
+            })
+            .catch(err => {
+              console.error(err);
+              this.error = 'Error fetching table snapshot.';
             });
         }
       },
       mounted() {
-        this.fetchDB();
+        this.fetchTables();
       }
     }).mount('#dbExplorerApp');
   </script>
