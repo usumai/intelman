@@ -13,10 +13,16 @@ CREATE TABLE IF NOT EXISTS intel_l100_files (
   metad_create_date TIMESTAMP,
   metad_edit_date TIMESTAMP,
   markdown_extract TEXT,
-  status VARCHAR(50)
+  title VARCHAR(255),
+  version VARCHAR(50),
+  author VARCHAR(255),
+  owner VARCHAR(255),
+  status VARCHAR(255)
   -- Uncomment and adjust the next line if you have a referenced table for file_series:
   --, FOREIGN KEY (file_series) REFERENCES file_series(file_series_id)
 );
+
+
 
 -- Table: intel_l101_docs
 -- Columns: doc_id, create_date, create_user, delete_date, delete_user, doc_name,

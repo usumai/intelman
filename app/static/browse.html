@@ -51,6 +51,7 @@
           <th>Stored Name</th>
           <th>Status</th>
           <th>Actions</th>
+          <th>Link</th>
         </tr>
       </thead>
       <tbody>
@@ -66,6 +67,7 @@
               Download
             </button>
           </td>
+          <td><a :href="`/file.html?file_id=${file.file_id}`" class="btn btn-sm btn-primary">View Details</a></td>
         </tr>
         <tr v-if="files.length === 0">
           <td colspan="6" class="text-center">No files recorded in DB.</td>

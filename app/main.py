@@ -28,13 +28,15 @@ from .routers.browse import router as browse_router
 from .routers.upload import router as upload_router
 from .routers.llm import router as llm_router
 from .routers.dbexplorer import router as dbexplorer_router
-from .routers.login import router as login_router  # login endpoints
+from .routers.login import router as login_router
+from .routers.file import router as file_router 
 
 app.include_router(browse_router, prefix="/api/browse")
 app.include_router(upload_router, prefix="/api/upload")
 app.include_router(llm_router, prefix="/api/llm")
 app.include_router(dbexplorer_router, prefix="/api/dbexplorer")
 app.include_router(login_router, prefix="/api/login")
+app.include_router(file_router, prefix="/api/file") 
 
 # Mount the static folder at the root.
 from fastapi.staticfiles import StaticFiles

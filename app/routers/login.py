@@ -13,7 +13,7 @@ router = APIRouter(tags=["login"])
 fake_users_db = {
     "test_user": {
         "username": "test_user",
-        "hashed_password": "$2b$12$KIX8F1Wc2wPFh8r9JtWnjeQwgE./vOVnD0nUHRjdS71/teWDH9Q5K",  # hash for 'dlpeye'
+        "hashed_password": "$2b$12$HQn0dzrY/7aYM4ybr0ny0.QS2yZAmMdE2BqOAwo2kNh.YpsZU.3Hm",  # hash for 'dlpeye'
     }
 }
 
