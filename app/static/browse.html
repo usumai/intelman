@@ -1,4 +1,3 @@
-<!-- app/static/browse.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -9,7 +8,6 @@
   <script src="js/vue.global.js"></script>
 </head>
 <body>
-
   <div id="menu"></div>
   <script type="module">
     import { renderMenu } from './js/menu.js';
@@ -17,13 +15,75 @@
   </script>
 
   <div class="container mt-5" id="browseApp">
-    <h1>Uploaded Files</h1>
-    <ul class="list-group">
+    <h1>File manager</h1>
+    <hr>
+
+    <!-- Upload Section -->
+    
+    <div class="mb-3">
+      <table class="table table-sm table-borderless">
+        <tr>
+          <td width="1%" nowrap><p class="mt-2">Upload new file</p></td>
+          <td><input type="file" class="form-control" @change="onFileChange"></td>
+          <td width="1%"><button class="btn btn-primary" @click="uploadFile" :disabled="!selectedFile">Upload</button></td>
+        </tr>
+      </table>
+      <p class="text-success" v-if="uploadResult">Upload Result:{{ uploadResult }}</p>
+      <p class="alert alert-danger" v-if="uploadError">{{ uploadError }}</p>
+      
+    </div>
+    
+    <hr>
+
+    <!-- Option Buttons to switch listing mode -->
+    <div class="mb-3">
+      <button class="btn btn-primary me-2" @click="useDB = true">List from DB</button>
+      <button class="btn btn-secondary" @click="useDB = false">List from Folder</button>
+    </div>
+    
+    <!-- Table for DB-based listing -->
+    <table v-if="useDB" class="table table-striped">
+      <thead>
+        <tr>
+          <th>File ID</th>
+          <th>Uploaded By</th>
+          <th>Original Name</th>
+          <th>Stored Name</th>
+          <th>Status</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr v-for="file in files" :key="file.file_id">
+          <td>{{ file.file_id }}</td>
+          <td>{{ file.create_user }}</td>
+          <td>{{ file.uploaded_file_name }}</td>
+          <td>{{ file.file_name }}</td>
+          <td>{{ file.status }}</td>
+          <td>
+            <!-- Instead of a plain anchor, use a button that calls downloadFile -->
+            <button class="btn btn-sm btn-primary" @click="downloadFile(file.file_name)">
+              Download
+            </button>
+          </td>
+        </tr>
+        <tr v-if="files.length === 0">
+          <td colspan="6" class="text-center">No files recorded in DB.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <!-- List for folder-based listing -->
+    <ul v-else class="list-group">
       <li class="list-group-item" v-for="file in files" :key="file">
-        <a :href="`/api/browse/download/${file}`">{{ file }}</a>
+        {{ file }}
+        <button class="btn btn-sm btn-primary float-end" @click="downloadFile(file)">
+          Download
+        </button>
       </li>
+      <li class="list-group-item" v-if="files.length === 0">No files in folder.</li>
     </ul>
-    <p v-if="files.length === 0">No files uploaded.</p>
+
   </div>
 
   <script>
@@ -31,18 +91,111 @@
     createApp({
       data() {
         return {
-          files: []
+          files: [],
+          useDB: true,  // true for DB listing, false for folder listing
+          selectedFile: null,
+          uploadResult: '',
+          uploadError: ''
+        }
+      },
+      methods: {
+        fetchFiles() {
+          const token = localStorage.getItem('access_token');  // Retrieve JWT token from localStorage
+          // Use different endpoints based on the listing mode.
+          const endpoint = this.useDB ? '/api/browse/db' : '/api/browse/folder';
+          fetch(endpoint, {
+            headers: {
+              'Authorization': `Bearer ${token}`
+            }
+          })
+            .then(response => {
+              if (!response.ok) {
+                throw new Error("Failed to fetch files.");
+              }
+              return response.json();
+            })
+            .then(data => {
+              // The API should return data.files as either an array of objects or filenames.
+              this.files = data.files;
+            })
+            .catch(error => {
+              console.error('Error fetching files:', error);
+              this.uploadError = 'Error fetching files: ' + error.message;
+            });
+        },
+        onFileChange(event) {
+          this.selectedFile = event.target.files[0];
+        },
+        async uploadFile() {
+          if (!this.selectedFile) {
+            this.uploadError = 'Please select a file.';
+            return;
+          }
+          this.uploadError = '';
+          const formData = new FormData();
+          formData.append('file', this.selectedFile);
+          const token = localStorage.getItem('access_token');  // Retrieve JWT token
+          try {
+            const response = await fetch('/api/upload/', {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${token}`
+              },
+              body: formData
+            });
+            const data = await response.json();
+            if (response.ok) {
+              // Assume API returns a field named "markdown" as the upload result.
+              this.uploadResult = "Successfully uploaded with ID:"+data.record_id;
+              // Refresh the file list after a successful upload.
+              this.fetchFiles();
+            } else {
+              this.uploadError = data.detail || 'Upload failed.';
+            }
+          } catch (err) {
+            console.error('Upload error:', err);
+            this.uploadError = 'An error occurred during upload.';
+          }
+        },
+        downloadFile(fileName) {
+          const token = localStorage.getItem('access_token');  // Retrieve JWT token
+          fetch(`/api/browse/download/${fileName}`, {
+            headers: {
+              'Authorization': `Bearer ${token}`
+            }
+          })
+          .then(response => {
+            if (!response.ok) {
+              throw new Error("Failed to download file.");
+            }
+            return response.blob();
+          })
+          .then(blob => {
+            // Create a temporary link to download the file
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            // Use fileName or a more descriptive file name if available
+            link.setAttribute('download', fileName);
+            document.body.appendChild(link);
+            link.click();
+            link.parentNode.removeChild(link);
+            window.URL.revokeObjectURL(url);
+          })
+          .catch(error => {
+            console.error('Download error:', error);
+            alert('Error downloading file: ' + error.message);
+          });
+        }
+      },
+      watch: {
+        // Refetch files whenever the listing mode (DB vs folder) changes.
+        useDB() {
+          this.fetchFiles();
         }
       },
       mounted() {
-        fetch('/api/browse/')
-          .then(response => response.json())
-          .then(data => {
-            this.files = data.files;
-          })
-          .catch(error => {
-            console.error('Error fetching files:', error);
-          });
+        this.fetchFiles();
       }
     }).mount('#browseApp');
   </script>

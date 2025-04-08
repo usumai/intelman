@@ -1,5 +1,6 @@
 # app/services/file_database_service.py
 import psycopg2
+from psycopg2.extras import RealDictCursor
 from ..config import DATABASE_URL
 
 def get_connection():
@@ -10,7 +11,7 @@ def insert_file_record(create_user, uploaded_file_name, status):
     try:
         with conn.cursor() as cur:
             cur.execute("""
-                INSERT INTO intel_L100_files (create_user, uploaded_file_name, file_name, status)
+                INSERT INTO intel_l100_files (create_user, uploaded_file_name, file_name, status)
                 VALUES (%s, %s, %s, %s)
                 RETURNING file_id;
             """, (create_user, uploaded_file_name, "placeholder", status))
@@ -28,7 +29,7 @@ def update_file_record(file_id, file_name, markdown_extract):
     try:
         with conn.cursor() as cur:
             cur.execute("""
-                UPDATE intel_L100_files
+                UPDATE intel_l100_files
                 SET file_name = %s,
                     markdown_extract = %s,
                     metad_create_date = CURRENT_TIMESTAMP,
@@ -36,6 +37,33 @@ def update_file_record(file_id, file_name, markdown_extract):
                 WHERE file_id = %s;
             """, (file_name, markdown_extract, file_id))
         conn.commit()
+    except Exception as e:
+        conn.rollback()
+        raise e
+    finally:
+        conn.close()
+
+
+
+def list_file_records():
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("""
+                SELECT 
+                    file_id, 
+                    create_user, 
+                    uploaded_file_name, 
+                    file_name, 
+                    status, 
+                    markdown_extract,
+                    metad_create_date,
+                    metad_edit_date
+                FROM intel_l100_files
+                ORDER BY file_id;
+            """)
+            files = cur.fetchall()
+        return files
     except Exception as e:
         conn.rollback()
         raise e

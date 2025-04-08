@@ -10,19 +10,22 @@
 </head>
 <body>
 
-  <div id="menu"></div>
-  <script type="module">
-    import { renderMenu } from './js/menu.js';
-    renderMenu();
-  </script>
+  <nav class="navbar navbar-expand-lg navbar-light bg-light">
+    <div class="container-fluid">
+      <a class="navbar-brand" href="index.html">My App</a>
+    </div>
+  </nav>
 
   <div class="container mt-5" id="loginApp">
     <h2>Login</h2>
     <div class="alert alert-danger" v-if="error">{{ error }}</div>
+    <!-- Remove the Username Field -->
+    <!--
     <div class="mb-3">
       <label for="username" class="form-label">Username</label>
       <input type="text" class="form-control" id="username" v-model="username">
     </div>
+    -->
     <div class="mb-3">
       <label for="password" class="form-label">Password</label>
       <input type="password" class="form-control" id="password" v-model="password">
@@ -35,7 +38,7 @@
     createApp({
       data() {
         return {
-          username: '',
+          // username field removed from UI
           password: '',
           error: ''
         }
@@ -43,7 +46,8 @@
       methods: {
         async attemptLogin() {
           const formData = new URLSearchParams();
-          formData.append('username', this.username);
+          // Hardcode the username so the backend receives a value.
+          formData.append('username', 'user');
           formData.append('password', this.password);
 
           try {

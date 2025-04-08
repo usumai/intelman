@@ -1,4 +1,4 @@
-<!-- app/static/dbexplorer.html -->
+<!-- /app/static/dbexplorer.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -80,8 +80,13 @@
         fetchTables() {
           this.error = '';
           this.tables = [];
-          // Fetch the list of tables from the new endpoint
-          fetch('/api/dbexplorer/tables')
+          const token = localStorage.getItem('access_token');
+          // Fetch the list of tables using the Authorization header with the token.
+          fetch('/api/dbexplorer/tables', {
+            headers: {
+              'Authorization': `Bearer ${token}`
+            }
+          })
             .then(resp => {
               if (!resp.ok) {
                 throw new Error("Failed to fetch tables.");
@@ -100,8 +105,13 @@
           this.error = '';
           this.selectedTable = table;
           this.tableSnapshot = { columns: [], records: [] };
-          // Fetch the snapshot for the selected table
-          fetch(`/api/dbexplorer/table/${table}`)
+          const token = localStorage.getItem('access_token');
+          // Fetch the snapshot for the selected table with the Authorization header.
+          fetch(`/api/dbexplorer/table/${table}`, {
+            headers: {
+              'Authorization': `Bearer ${token}`
+            }
+          })
             .then(resp => {
               if (!resp.ok) {
                 throw new Error("Failed to fetch table snapshot.");

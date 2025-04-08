@@ -1,13 +1,15 @@
-from fastapi import APIRouter, HTTPException
+# /app/routers/dbexplorer.py
+from fastapi import APIRouter, HTTPException, Depends
 import psycopg2
 from psycopg2.extras import RealDictCursor
 from psycopg2 import sql
 from ..config import DATABASE_URL
+from .login import get_current_user  # Import the authentication dependency
 
 router = APIRouter(tags=["dbexplorer"])
 
 @router.get("/tables")
-def list_tables():
+def list_tables(current_user: dict = Depends(get_current_user)):
     """
     Return a list of table names from the public schema.
     """
@@ -31,9 +33,8 @@ def list_tables():
         if conn:
             conn.close()
 
-
 @router.get("/table/{table_name}")
-def get_table_snapshot(table_name: str):
+def get_table_snapshot(table_name: str, current_user: dict = Depends(get_current_user)):
     """
     Returns a snapshot of a given table. The response contains:
       - "columns": list of column names,
