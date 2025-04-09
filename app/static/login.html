@@ -16,28 +16,34 @@
   </nav>
 
   <div class="container mt-5" id="loginApp">
-    <h2>Login</h2>
-    <div class="alert alert-danger" v-if="error">{{ error }}</div>
+    <div class="row">
+      <div class="col-6 mx-auto">
 
-    <!-- Wrap fields and button in a form and use @submit.prevent -->
-    <form @submit.prevent="attemptLogin">
-      <!-- Hidden username field -->
-      <input type="hidden" class="form-control" id="username" v-model="username">
-
-      <div class="mb-3">
-        <label for="password" class="form-label">Password</label>
-        <input 
-          type="password" 
-          class="form-control" 
-          id="password" 
-          v-model="password" 
-          placeholder="Enter your password"
-        >
+        <h2>Login</h2>
+        <div class="alert alert-danger" v-if="error">{{ error }}</div>
+    
+        <!-- Wrap fields and button in a form and use @submit.prevent -->
+        <form @submit.prevent="attemptLogin">
+          <!-- Hidden username field -->
+          <input type="hidden" class="form-control" id="username" v-model="username">
+    
+          <div class="mb-3">
+            <label for="password" class="form-label">Password</label>
+            <input 
+              type="password" 
+              class="form-control" 
+              id="password" 
+              v-model="password" 
+              placeholder="Enter your password"
+            >
+          </div>
+    
+          <!-- Button now a submit button -->
+          <button type="submit" class="btn btn-outline-dark float-end">Login</button>
+        </form>
       </div>
-
-      <!-- Button now a submit button -->
-      <button type="submit" class="btn btn-primary">Login</button>
-    </form>
+    </div>
+    
   </div>
 
   <script>

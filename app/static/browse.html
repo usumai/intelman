@@ -102,14 +102,9 @@
       },
       methods: {
         fetchFiles() {
-          const token = localStorage.getItem('access_token');  // Retrieve JWT token from localStorage
-          // Use different endpoints based on the listing mode.
           const endpoint = this.useDB ? '/api/browse/db' : '/api/browse/folder';
-          fetch(endpoint, {
-            headers: {
-              'Authorization': `Bearer ${token}`
-            }
-          })
+          
+          fetch(endpoint)
             .then(response => {
               if (!response.ok) {
                 throw new Error("Failed to fetch files.");
@@ -136,13 +131,9 @@
           this.uploadError = '';
           const formData = new FormData();
           formData.append('file', this.selectedFile);
-          const token = localStorage.getItem('access_token');  // Retrieve JWT token
           try {
             const response = await fetch('/api/upload/', {
               method: 'POST',
-              headers: {
-                'Authorization': `Bearer ${token}`
-              },
               body: formData
             });
             const data = await response.json();
@@ -160,12 +151,7 @@
           }
         },
         downloadFile(fileName) {
-          const token = localStorage.getItem('access_token');  // Retrieve JWT token
-          fetch(`/api/browse/download/${fileName}`, {
-            headers: {
-              'Authorization': `Bearer ${token}`
-            }
-          })
+          fetch(`/api/browse/download/${fileName}`)
           .then(response => {
             if (!response.ok) {
               throw new Error("Failed to download file.");

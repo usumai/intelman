@@ -1,6 +1,10 @@
-// /app/static/js/menu.js
-
 export function renderMenu() {
+
+  if (!localStorage.getItem('access_token')) {
+    window.location.href = '/login.html';
+    return; // Stop processing further until the user logs in.
+  }
+
   const menu = document.getElementById('menu');
   menu.innerHTML = `
     <nav class="navbar navbar-expand-lg navbar-light bg-light">
@@ -29,9 +33,6 @@ export function renderMenu() {
             </li>
           </ul>
           <ul class="navbar-nav">
-            <li class="nav-item" id="loginNav">
-              <a class="nav-link" href="login.html">Login</a>
-            </li>
             <li class="nav-item" id="logoutNav" style="display: none;">
               <a class="nav-link" href="#" id="logoutBtn">Logout</a>
             </li>
@@ -41,40 +42,11 @@ export function renderMenu() {
     </nav>
   `;
 
-  // Check if the user is logged in (by checking for a stored token)
-  if (localStorage.getItem('access_token')) {
-    // Show logout and hide login menu items
-    document.getElementById('logoutNav').style.display = 'block';
-    document.getElementById('loginNav').style.display = 'none';
-
-    // Bind the logout button event
-    document.getElementById('logoutBtn').addEventListener('click', async (event) => {
-      event.preventDefault();
-      await logout();
-    });
-  } else {
-    // If no token, only show the login link
-    document.getElementById('logoutNav').style.display = 'none';
-    document.getElementById('loginNav').style.display = 'block';
-  }
 }
 
 async function logout() {
-  try {
-    // Optionally, notify the backend that we're logging out.
-    // This endpoint currently just returns a message and does no token revocation.
-    const response = await fetch('/api/login/logout', {
-      method: 'POST'
-    });
-    const data = await response.json();
-    console.log(data.message);
-  } catch (err) {
-    console.error('Error during logout:', err);
-  }
-  // Remove the token from local storage
   localStorage.removeItem('access_token');
-  // Redirect to the login page (or any public page)
-  window.location.href = 'login.html';
+  window.location.href = '/login.html';
 }
 
 export { logout };
