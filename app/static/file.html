@@ -2,11 +2,10 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>File Details - My App</title>
+  <title>File Details</title>
   <link rel="icon" type="image/x-icon" href="images/favicon.ico">
   <link href="css/bootstrap.min.css" rel="stylesheet">
   <script src="js/vue.global.js"></script>
-  <!-- Include markdown-it library -->
   <script src="js/markdown-it.min.js"></script>
 </head>
 <body>
@@ -27,7 +26,7 @@
     <div v-else-if="file">
       <div class="row">
         <!-- Left Pane: File details without Markdown -->
-        <div class="col-md-4">
+        <div class="col-md-3">
             <h4>IntelMan details</h4><hr>
             <p><strong>File ID:</strong> {{ file.file_id }}</p>
             <p><strong>Stored Filename:</strong> {{ file.file_name }}</p>
@@ -123,19 +122,11 @@
           this.error = '';
           this.metadata = null;
           try {
-            if (!token) {
-              this.error = 'You must be logged in to scrape metadata.';
-              return;
-            }
-            const response = await fetch(`/api/scrape/scrape/${this.fileId}`, {
+            const response = await fetch(`/api/scrape/${this.fileId}`, {
               method: 'POST',
             });
             const data = await response.json();
-            if (response.ok) {
-              this.metadata = data.metadata;
-            } else {
-              this.error = data.detail || 'Scraping failed.';
-            }
+            this.fetchFileDetails();
           } catch (err) {
             console.error(err);
             this.error = 'An error occurred while scraping metadata.';

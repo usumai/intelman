@@ -70,6 +70,10 @@ class LLMRequest(BaseModel):
 def query_llm(data: LLMRequest):
     return query_llm_service(data.prompt, data.messages)
 
+@router.post("/api/scrape/{fileId}", dependencies=[Depends(same_origin_only)])
+async def scrape_file(fileId: int):
+    return scrape_metadata_service(fileId)
+
 # ---------------------------
 # DB EXPLORER ENDPOINTS
 # ---------------------------

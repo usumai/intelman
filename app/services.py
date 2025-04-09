@@ -5,10 +5,8 @@ import requests
 import psycopg2
 from psycopg2.extras import RealDictCursor
 from psycopg2 import sql
-
-# Import your config constants
-from .config import STORAGE_FOLDER, DATABASE_URL
-
+from .config import STORAGE_FOLDER, DATABASE_URL, API_KEY
+import json
 
 
 ###############################################################################
@@ -179,39 +177,181 @@ def update_file_record(file_id, file_name, markdown_extract):
         if conn:
             conn.close()
 
+def update_file_record_scrape(file_id: int, scraped_data: dict):
+    """
+    Update the intel_l100_files record with scraped metadata data.
+    
+    Parameters:
+      file_id (int): The unique identifier of the file record.
+      scraped_data (dict): A dictionary containing the following keys:
+          - "document_title" (mapped to the title column)
+          - "document_author" (mapped to the author column)
+          - "document_version" (mapped to the version column)
+          - "document_description" (mapped to the file_description column)
+    
+    The function updates the record's title, author, version, and file_description,
+    and sets the metad_edit_date to the current timestamp.
+    """
+    conn = None
+    try:
+        conn = psycopg2.connect(DATABASE_URL)
+        with conn.cursor() as cur:
+            cur.execute("""
+                UPDATE intel_l100_files
+                SET title = %s,
+                    author = %s,
+                    version = %s,
+                    file_description = %s,
+                    metad_edit_date = CURRENT_TIMESTAMP
+                WHERE file_id = %s;
+            """, (
+                scraped_data.get("document_title", ""),
+                scraped_data.get("document_author", ""),
+                scraped_data.get("document_version", ""),
+                scraped_data.get("document_description", ""),
+                file_id
+            ))
+        conn.commit()
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        raise e
+    finally:
+        if conn:
+            conn.close()
+
+def scrape_metadata_service(file_id: int):
+    """
+    Retrieve a file record by file_id, then perform a simple scraping action.
+    For demonstration, we open the file and read its first 100 characters as a "preview".
+    You can replace the logic below with more advanced scraping as needed.
+    """
+    # Get file details from the DB; this will also raise a 404 if not found.
+    file_details = get_file_details_service(file_id)
+    markdown_extract = file_details["markdown_extract"]
+    prompt = 'Return only JSON based on information contained withing this: '+markdown_extract
+    scraped_data = query_llm_tool(prompt)
+
+    update_file_record_scrape(file_id=file_id, scraped_data=scraped_data)
+
+    
 ###############################################################################
 # LLM SERVICE
 ###############################################################################
-def query_llm_service(prompt: Optional[str], messages: Optional[List[dict]]):
+
+
+def query_llm_service(prompt: Optional[str] = None, messages: Optional[List[dict]] = None):
     """
     Send a request to your LLM backend and return the JSON response.
     """
+    url_str = "https://dlpi-ai-api.openai.azure.com/openai/deployments/gpt-4o-mini/chat/completions?api-version=2025-01-01-preview"
+    
     if not prompt and not messages:
         raise HTTPException(status_code=400, detail="No prompt or messages provided")
-
-    # Build messages array
-    if messages:
-        final_messages = messages
-    else:
-        final_messages = [{"role": "user", "content": prompt}]
-
-    api_url = ""  # Your real LLM endpoint
+    final_messages = messages if messages else [{"role": "user", "content": prompt}]
     headers = {
         "Content-Type": "application/json",
-        "api-key": ""
+        "api-key": API_KEY
     }
     payload = {
         "messages": final_messages,
-        "max_completion_tokens": 5000,
-        "reasoning_effort": "high"
+        "max_tokens": 1000,
+        "temperature": 0.7
     }
-
     try:
-        response = requests.post(api_url, json=payload, headers=headers)
+        response = requests.post(url_str, json=payload, headers=headers)
         response.raise_for_status()
         return response.json()
     except requests.exceptions.RequestException as e:
         raise HTTPException(status_code=500, detail=f"LLM request failed: {str(e)}")
+
+
+def query_llm_tool(prompt: Optional[str] = None, messages: Optional[List[dict]] = None):
+    """
+    Send a request to your LLM backend and return structured JSON using tool calling.
+    Ensures the JSON matches: {"document_title": "","document_author": "","document_version": "","document_description": ""}
+    """
+    url_str = "https://dlpi-ai-api.openai.azure.com/openai/deployments/gpt-4o-mini/chat/completions?api-version=2025-01-01-preview"
+
+    if not prompt and not messages:
+        raise HTTPException(status_code=400, detail="No prompt or messages provided")
+    
+    final_messages = messages if messages else [{"role": "user", "content": prompt}]
+    
+    tools = [
+        {
+            "type": "function",
+            "function": {
+                "name": "generate_document_metadata",
+                "description": "Generate structured metadata for a document.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "document_title": { "type": "string" },
+                        "document_author": { "type": "string" },
+                        "document_version": { "type": "string" },
+                        "document_description": { "type": "string" }
+                    },
+                    "required": ["document_title", "document_author", "document_version", "document_description"]
+                }
+            }
+        }
+    ]
+
+    headers = {
+        "Content-Type": "application/json",
+        "api-key": API_KEY
+    }
+
+    payload = {
+        "messages": final_messages,
+        "tools": tools,
+        "tool_choice": {
+            "type": "function",
+            "function": { "name": "generate_document_metadata" }
+        },
+        "max_tokens": 1000,
+        "temperature": 0.0  # Keep it deterministic for clean JSON
+    }
+
+    try:
+        response = requests.post(url_str, json=payload, headers=headers)
+        response.raise_for_status()
+        data = response.json()
+
+        # Parse the JSON from tool_calls
+        tool_calls = data["choices"][0]["message"].get("tool_calls", [])
+        if tool_calls:
+            function_args = tool_calls[0]["function"].get("arguments", "{}")
+            return json.loads(function_args)  # clean parsed JSON
+        else:
+            raise HTTPException(status_code=500, detail="No tool call returned from model.")
+
+    except requests.exceptions.RequestException as e:
+        raise HTTPException(status_code=500, detail=f"LLM request failed: {str(e)}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
+
+
+def get_llm_response_text(prompt: str) -> str:
+    """
+    Calls the query_llm_service with a given prompt and returns the text content.
+    Returns an empty string if the response is missing or malformed.
+    """
+    if not prompt:
+        # You could choose to raise an exception here, but returning empty is also possible.
+        return ""
+    
+    response = query_llm_service(prompt=prompt)
+    try:
+        text_content = response["choices"][0]["message"]["content"]
+    except (KeyError, IndexError, TypeError):
+        # If the JSON structure isn't as expected, return an empty string
+        return ""
+    
+    # If the content is None or an empty string, return "" instead
+    return text_content or ""
+
 
 ###############################################################################
 # DB EXPLORER SERVICES
