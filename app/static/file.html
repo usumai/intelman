@@ -16,7 +16,7 @@
     renderMenu();
   </script>
 
-  <div class="container mt-5" id="fileApp">
+  <div class="container-fluid mt-5" id="fileApp">
     <h1>File Details</h1>
     <hr>
     
@@ -28,31 +28,29 @@
       <div class="row">
         <!-- Left Pane: File details without Markdown -->
         <div class="col-md-4">
-            <h4>IntelMan details</h4>
-            <hr>
+            <h4>IntelMan details</h4><hr>
             <p><strong>File ID:</strong> {{ file.file_id }}</p>
             <p><strong>Stored Filename:</strong> {{ file.file_name }}</p>
             <p><strong>Status:</strong> {{ file.status }}</p>
 
-            <h4>
+            <hr><h4>
                 Internal document details
-                <button class="btn btn-outline-dark"
+                <button class="btn btn-sm btn-outline-dark float-end"
                     @click="scrapeMetadata">Scrape</button>
 
-            </h4>
+            </h4><hr>
             <p><strong>Description:</strong> {{ file.description }}</p>
             <p><strong>File Description:</strong> {{ file.file_description }}</p>
             <p><strong>Author:</strong> {{ file.author }}</p>
             <p><strong>Title:</strong> {{ file.title }}</p>
             <p><strong>Version:</strong> {{ file.version }}</p>
             
-            <h4>Document</h4>
+            <hr><h4>Document</h4><hr>
             <p><strong>Doc ID:</strong> {{ file.doc_id }}</p>
             <p><strong>Owner:</strong> {{ file.owner }}</p>
             <p><strong>Fingerprint:</strong> {{ file.fingerprint }}</p>
             
-
-            <h4>Metadata</h4>
+            <hr><h4>Metadata</h4><hr>
             <p><strong>Uploaded Filename:</strong> {{ file.uploaded_file_name }}</p>
             <p><strong>Created:</strong> {{ file.metad_create_date }}</p>
             <p><strong>Last Updated:</strong> {{ file.metad_edit_date }}</p>
@@ -122,7 +120,6 @@
           })
         },
         async scrapeMetadata() {
-          
           this.error = '';
           this.metadata = null;
           try {

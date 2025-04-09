@@ -14,7 +14,7 @@
     renderMenu();
   </script>
 
-  <div class="container mt-5" id="browseApp">
+  <div class="container-fluid mt-5" id="browseApp">
     <h1>File manager</h1>
     <hr>
 
@@ -34,15 +34,9 @@
     </div>
     
     <hr>
-
-    <!-- Option Buttons to switch listing mode -->
-    <div class="mb-3">
-      <button class="btn btn-primary me-2" @click="useDB = true">List from DB</button>
-      <button class="btn btn-secondary" @click="useDB = false">List from Folder</button>
-    </div>
     
     <!-- Table for DB-based listing -->
-    <table v-if="useDB" class="table table-striped">
+    <table v-if="useDB" class="table table-sm">
       <thead>
         <tr>
           <th>File ID</th>
@@ -50,7 +44,6 @@
           <th>Original Name</th>
           <th>Stored Name</th>
           <th>Status</th>
-          <th>Actions</th>
           <th>Link</th>
         </tr>
       </thead>
@@ -59,15 +52,16 @@
           <td>{{ file.file_id }}</td>
           <td>{{ file.create_user }}</td>
           <td>{{ file.uploaded_file_name }}</td>
-          <td>{{ file.file_name }}</td>
-          <td>{{ file.status }}</td>
           <td>
-            <!-- Instead of a plain anchor, use a button that calls downloadFile -->
-            <button class="btn btn-sm btn-primary" @click="downloadFile(file.file_name)">
-              Download
+            <button class="btn btn-link pt-0" @click="downloadFile(file.file_name)">
+              {{ file.file_name }}
             </button>
           </td>
-          <td><a :href="`/file.html?file_id=${file.file_id}`" class="btn btn-sm btn-primary">View Details</a></td>
+          <td>{{ file.status }}</td>
+          <td width="1%">
+            <a :href="`/file.html?file_id=${file.file_id}`" 
+              class="btn btn-sm btn-outline-dark">Details</a>
+          </td>
         </tr>
         <tr v-if="files.length === 0">
           <td colspan="6" class="text-center">No files recorded in DB.</td>
@@ -75,7 +69,6 @@
       </tbody>
     </table>
 
-    <!-- List for folder-based listing -->
     <ul v-else class="list-group">
       <li class="list-group-item" v-for="file in files" :key="file">
         {{ file }}

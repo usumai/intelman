@@ -15,7 +15,7 @@
     renderMenu();
   </script>
 
-  <div class="container mt-5" id="chatApp">
+  <div class="container-fluid mt-5" id="chatApp">
     <h1>Chat with LLM</h1>
     <div id="conversation" style="max-height: 400px; overflow-y: auto; border: 1px solid #ccc; padding: 10px;">
       <div v-for="(message, index) in messages" :key="index" :class="{'text-end': message.role === 'assistant'}">

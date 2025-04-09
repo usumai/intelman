@@ -4,7 +4,6 @@ fastapi==0.95.0
 uvicorn==0.21.1
 psycopg2-binary==2.9.6
 requests==2.28.2 
-passlib[bcrypt]==1.7.4
 
 wait-for-db.sh:
 #!/bin/bash
@@ -84,20 +83,13 @@ volumes:
 
 
 /app/services.py:
-from fastapi import HTTPException, UploadFile, Response
-from fastapi.security import OAuth2PasswordRequestForm
-from passlib.context import CryptContext
+from fastapi import HTTPException, UploadFile
 from typing import Optional, List
 import os
 import requests
 import psycopg2
 from psycopg2.extras import RealDictCursor
 from psycopg2 import sql
-from datetime import datetime, timedelta
-import jwt
-
-# Additional imports needed for login_with_session_service
-from uuid import uuid4
 
 # Import your config constants
 from .config import STORAGE_FOLDER, DATABASE_URL
@@ -167,7 +159,6 @@ def get_file_details_service(file_id: int):
 ###############################################################################
 # UPLOAD SERVICES
 ###############################################################################
-
 def process_upload_service(file: UploadFile):
     """
     Handle uploading file, saving it, converting to markdown, updating DB.
@@ -215,7 +206,6 @@ def process_upload_service(file: UploadFile):
 ###############################################################################
 # HELPER FUNCTIONS FOR UPLOAD SERVICE
 ###############################################################################
-
 def convert_file_to_markdown(file_path: str, enable_plugins: bool = False) -> str:
     """
     Convert a file to Markdown using MarkItDown or any library you like.
@@ -277,7 +267,6 @@ def update_file_record(file_id, file_name, markdown_extract):
 ###############################################################################
 # LLM SERVICE
 ###############################################################################
-
 def query_llm_service(prompt: Optional[str], messages: Optional[List[dict]]):
     """
     Send a request to your LLM backend and return the JSON response.
@@ -312,7 +301,6 @@ def query_llm_service(prompt: Optional[str], messages: Optional[List[dict]]):
 ###############################################################################
 # DB EXPLORER SERVICES
 ###############################################################################
-
 def list_tables_service():
     """
     Return a list of table names from the public schema.
@@ -381,14 +369,12 @@ ALGORITHM = "HS256"
 
 
 /app/routing.py:
-from fastapi import APIRouter, File, UploadFile, Depends, HTTPException, Response, Request
+from fastapi import APIRouter, File, UploadFile, Depends, HTTPException, Response, Request, Form
 from fastapi.responses import FileResponse, JSONResponse
-from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel
 from typing import Optional, List
 
 from .services import *
-
 
 router = APIRouter()
 
@@ -402,6 +388,18 @@ async def same_origin_only(request: Request):
         raise HTTPException(status_code=403, detail="Cross-origin requests are not allowed.")
 
 
+# ---------------------------
+# LOGIN ENDPOINT
+# ---------------------------
+@router.post("/api/login/login")
+async def login(username: str = Form(...), password: str = Form(...)):
+    if username == "test_user" and password == "dlpi":
+        response = JSONResponse({"access_token": "valid_token", "redirect_url": "/index.html"})
+        response.set_cookie(key="access_token", value="valid_token", httponly=True)
+        return response
+    else:
+        return JSONResponse({"detail": "Invalid credentials"}, status_code=400)
+    
 # ---------------------------
 # BROWSE ENDPOINTS
 # ---------------------------
@@ -454,15 +452,48 @@ def list_tables():
 def get_table_snapshot(table_name: str):
     return get_table_snapshot_service(table_name)
 
-
-
 /app/main.py:
-from fastapi import FastAPI
+# /app/main.py
+
+from fastapi import FastAPI, Request
+from fastapi.responses import RedirectResponse
 from starlette.staticfiles import StaticFiles
+
 from .routing import router
+
 app = FastAPI(title="My FastAPI App")
+
+# Include your routers.
 app.include_router(router)
+
+# Serve static files (including your login page, index.html, etc.)
 app.mount("/", StaticFiles(directory="app/static", html=True), name="static")
+
+@app.middleware("http")
+async def auth_middleware(request: Request, call_next):
+    # Define a list of public paths that don't require authentication.
+    public_paths = [
+        "/login.html",      # Login page
+        "/api/login/login"  # Login API endpoint
+    ]
+    # Allow access to static assets and documentation endpoints without auth.
+    if request.url.path.startswith("/static"):
+        return await call_next(request)
+
+    # If the request path is public, bypass authentication.
+    if request.url.path in public_paths:
+        return await call_next(request)
+
+    # Check if the access_token cookie is set.
+    token = request.cookies.get("access_token")
+    if not token:
+        # Redirect to the login page if the token is missing.
+        return RedirectResponse(url="/login.html")
+
+    # Otherwise, continue processing the request.
+    response = await call_next(request)
+    return response
+
 
 /app/static/index.html:
 <!-- index.html -->
@@ -786,28 +817,34 @@ Error reading file: 'utf-8' codec can't decode byte 0x86 in position 23: invalid
   </nav>
 
   <div class="container mt-5" id="loginApp">
-    <h2>Login</h2>
-    <div class="alert alert-danger" v-if="error">{{ error }}</div>
+    <div class="row">
+      <div class="col-6 mx-auto">
 
-    <!-- Wrap fields and button in a form and use @submit.prevent -->
-    <form @submit.prevent="attemptLogin">
-      <!-- Hidden username field -->
-      <input type="hidden" class="form-control" id="username" v-model="username">
-
-      <div class="mb-3">
-        <label for="password" class="form-label">Password</label>
-        <input 
-          type="password" 
-          class="form-control" 
-          id="password" 
-          v-model="password" 
-          placeholder="Enter your password"
-        >
+        <h2>Login</h2>
+        <div class="alert alert-danger" v-if="error">{{ error }}</div>
+    
+        <!-- Wrap fields and button in a form and use @submit.prevent -->
+        <form @submit.prevent="attemptLogin">
+          <!-- Hidden username field -->
+          <input type="hidden" class="form-control" id="username" v-model="username">
+    
+          <div class="mb-3">
+            <label for="password" class="form-label">Password</label>
+            <input 
+              type="password" 
+              class="form-control" 
+              id="password" 
+              v-model="password" 
+              placeholder="Enter your password"
+            >
+          </div>
+    
+          <!-- Button now a submit button -->
+          <button type="submit" class="btn btn-outline-dark float-end">Login</button>
+        </form>
       </div>
-
-      <!-- Button now a submit button -->
-      <button type="submit" class="btn btn-primary">Login</button>
-    </form>
+    </div>
+    
   </div>
 
   <script>
@@ -833,6 +870,7 @@ Error reading file: 'utf-8' codec can't decode byte 0x86 in position 23: invalid
           try {
             const response = await fetch('/api/login/login', {
               method: 'POST',
+              credentials: 'same-origin',
               headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
               body: formData
             });
@@ -840,6 +878,8 @@ Error reading file: 'utf-8' codec can't decode byte 0x86 in position 23: invalid
             if (response.ok) {
               localStorage.setItem('access_token', data.access_token);
               window.location.href = 'index.html';
+              const data = await response.json();
+              window.location.href = data.redirect_url;
             } else {
               this.error = data.detail || 'Login failed.';
             }

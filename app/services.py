@@ -6,9 +6,6 @@ import psycopg2
 from psycopg2.extras import RealDictCursor
 from psycopg2 import sql
 
-# Additional imports needed for login_with_session_service
-from uuid import uuid4
-
 # Import your config constants
 from .config import STORAGE_FOLDER, DATABASE_URL
 

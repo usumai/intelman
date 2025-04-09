@@ -1,5 +1,5 @@
-from fastapi import APIRouter, File, UploadFile, Depends, HTTPException, Response, Request
-from fastapi.responses import FileResponse
+from fastapi import APIRouter, File, UploadFile, Depends, HTTPException, Response, Request, Form
+from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 from typing import Optional, List
 
@@ -16,6 +16,19 @@ async def same_origin_only(request: Request):
     else:
         raise HTTPException(status_code=403, detail="Cross-origin requests are not allowed.")
 
+
+# ---------------------------
+# LOGIN ENDPOINT
+# ---------------------------
+@router.post("/api/login/login")
+async def login(username: str = Form(...), password: str = Form(...)):
+    if username == "test_user" and password == "dlpi":
+        response = JSONResponse({"access_token": "valid_token", "redirect_url": "/index.html"})
+        response.set_cookie(key="access_token", value="valid_token", httponly=True)
+        return response
+    else:
+        return JSONResponse({"detail": "Invalid credentials"}, status_code=400)
+    
 # ---------------------------
 # BROWSE ENDPOINTS
 # ---------------------------
