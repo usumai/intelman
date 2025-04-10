@@ -9,7 +9,6 @@ CREATE TABLE IF NOT EXISTS intel_l100_files (
   file_description TEXT,
   doc_id INTEGER, -- This is a foreign key; update the reference if you have a series table
   fingerprint VARCHAR(255),
-  description TEXT,
   metad_create_date TIMESTAMP,
   metad_edit_date TIMESTAMP,
   markdown_extract TEXT,
@@ -22,8 +21,7 @@ CREATE TABLE IF NOT EXISTS intel_l100_files (
   --, FOREIGN KEY (file_series) REFERENCES file_series(file_series_id)
 );
 
-
-
+---------------------------------------------------------------------------
 -- Table: intel_l101_docs
 -- Columns: doc_id, create_date, create_user, delete_date, delete_user, doc_name,
 --          doc_desc, doc_author, doc_owner, owner_group_id, doc_weights
@@ -44,51 +42,48 @@ CREATE TABLE IF NOT EXISTS intel_l101_docs (
 );
 
 ---------------------------------------------------------------------------
--- Table: intel_l102_group
--- Columns: group_id, create_date, create_user, delete_date, delete_user, group_name, group_desc
-CREATE TABLE IF NOT EXISTS intel_l102_group (
-  group_id SERIAL PRIMARY KEY,
+-- Table: intel_l102_candidate_settings
+-- Will specify what the file could be a candidate for
+CREATE TABLE IF NOT EXISTS intel_l102_candidate_settings (
+  candidate_id SERIAL PRIMARY KEY,
   create_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   create_user VARCHAR(50) NOT NULL,
   delete_date TIMESTAMP,
   delete_user VARCHAR(50),
-  group_name VARCHAR(255) NOT NULL,
-  group_desc TEXT
+  candidate_name VARCHAR(255),
+  candidate_desc VARCHAR(255),
+  candidate_fields VARCHAR(255),
+  owner_group_id INTEGER
+);
+
+INSERT INTO intel_l102_candidate_settings (create_user,candidate_name,candidate_desc,candidate_fields
+) VALUES (
+    'admin',
+    'volumetrics',
+    'file contains information about a stock code/item of supply/product, and contains measurements (length, width, height, weight)',
+    'stock_code_number, item_length_m, item_width_m, item_height_m, item_weight_kg'
+);
+INSERT INTO intel_l102_candidate_settings (create_user,candidate_name,candidate_desc,candidate_fields
+) VALUES (
+    'admin',
+    'event',
+    'file contains information about one or more events with a dates',
+    'event_date, event_description, event_tags'
 );
 
 ---------------------------------------------------------------------------
--- Table: intel_l103_group_users
--- Columns: group_user_id, create_date, create_user, delete_date, delete_user,
---          group_id, user_id, expiry_date
-CREATE TABLE IF NOT EXISTS intel_l103_group_users (
-  group_user_id SERIAL PRIMARY KEY,
+-- Table: intel_l103_candidacy
+-- Will highlight that the file is a candidate for something
+CREATE TABLE IF NOT EXISTS intel_l103_candidacy (
+  candidacy_id SERIAL PRIMARY KEY,
   create_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   create_user VARCHAR(50) NOT NULL,
   delete_date TIMESTAMP,
   delete_user VARCHAR(50),
-  group_id INTEGER NOT NULL,
-  user_id INTEGER NOT NULL,
-  expiry_date TIMESTAMP
-  -- Optionally, add foreign keys once the reference tables exist:
-  --, FOREIGN KEY (group_id) REFERENCES intel_l102_group(group_id)
-  --, FOREIGN KEY (user_id) REFERENCES users(user_id)
-);
-
----------------------------------------------------------------------------
--- Table: intel_l104_group_docs
--- Columns: group_doc_id, create_date, create_user, delete_date, delete_user,
---          group_id, doc_id, expiry_date
-CREATE TABLE IF NOT EXISTS intel_l104_group_docs (
-  group_doc_id SERIAL PRIMARY KEY,
-  create_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  create_user VARCHAR(50) NOT NULL,
-  delete_date TIMESTAMP,
-  delete_user VARCHAR(50),
-  group_id INTEGER NOT NULL,
-  doc_id INTEGER NOT NULL,
-  expiry_date TIMESTAMP
-  --, FOREIGN KEY (group_id) REFERENCES intel_l102_group(group_id)
-  --, FOREIGN KEY (doc_id) REFERENCES intel_l101_docs(doc_id)
+  candidate_id INTEGER,
+  file_id INTEGER,
+  candidacy_result VARCHAR(255),
+  result_status VARCHAR(255)
 );
 
 ---------------------------------------------------------------------------
@@ -138,6 +133,59 @@ CREATE TABLE IF NOT EXISTS intel_l107_deployment_docs (
   --, FOREIGN KEY (deployment_id) REFERENCES intel_l106_deployments(deployment_id)
   --, FOREIGN KEY (doc_id) REFERENCES intel_l101_docs(doc_id)
 );
+
+---------------------------------------------------------------------------
+-- Table: intel_l120_group
+-- Columns: group_id, create_date, create_user, delete_date, delete_user, group_name, group_desc
+CREATE TABLE IF NOT EXISTS intel_l120_group (
+  group_id SERIAL PRIMARY KEY,
+  create_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  create_user VARCHAR(50) NOT NULL,
+  delete_date TIMESTAMP,
+  delete_user VARCHAR(50),
+  group_name VARCHAR(255) NOT NULL,
+  group_desc TEXT
+);
+INSERT INTO intel_l120_group (create_user,group_name,group_desc) 
+VALUES ('admin','LAB','Primary group owners');
+
+---------------------------------------------------------------------------
+-- Table: intel_l121_group_users
+-- Columns: group_user_id, create_date, create_user, delete_date, delete_user,
+--          group_id, user_id, expiry_date
+CREATE TABLE IF NOT EXISTS intel_l121_group_users (
+  group_user_id SERIAL PRIMARY KEY,
+  create_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  create_user VARCHAR(50) NOT NULL,
+  delete_date TIMESTAMP,
+  delete_user VARCHAR(50),
+  group_id INTEGER NOT NULL,
+  user_id INTEGER NOT NULL,
+  expiry_date TIMESTAMP
+  -- Optionally, add foreign keys once the reference tables exist:
+  --, FOREIGN KEY (group_id) REFERENCES intel_l102_group(group_id)
+  --, FOREIGN KEY (user_id) REFERENCES users(user_id)
+);
+
+---------------------------------------------------------------------------
+-- Table: intel_l122_group_docs
+-- Columns: group_doc_id, create_date, create_user, delete_date, delete_user,
+--          group_id, doc_id, expiry_date
+CREATE TABLE IF NOT EXISTS intel_l122_group_docs (
+  group_doc_id SERIAL PRIMARY KEY,
+  create_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  create_user VARCHAR(50) NOT NULL,
+  delete_date TIMESTAMP,
+  delete_user VARCHAR(50),
+  group_id INTEGER NOT NULL,
+  doc_id INTEGER NOT NULL,
+  expiry_date TIMESTAMP
+  --, FOREIGN KEY (group_id) REFERENCES intel_l102_group(group_id)
+  --, FOREIGN KEY (doc_id) REFERENCES intel_l101_docs(doc_id)
+);
+
+
+
 
 ---------------------------------------------------------------------------
 -- Table: intel_L200_process

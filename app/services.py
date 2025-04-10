@@ -69,6 +69,7 @@ def get_file_details_service(file_id: int):
     finally:
         if conn:
             conn.close()
+        
 ###############################################################################
 # UPLOAD SERVICES
 ###############################################################################
@@ -115,6 +116,59 @@ def process_upload_service(file: UploadFile):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error processing upload: {e}")
+    
+###############################################################################
+# CANDIDATES
+###############################################################################
+def get_candidate_settings_from_db():
+    conn = psycopg2.connect(DATABASE_URL)
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    cur.execute("SELECT * FROM intel_l102_candidate_settings") 
+    candidate_settings = cur.fetchall()
+    return candidate_settings
+
+def save_candidate_assessment(file_id: int, candidate_id: int, assessment: dict, create_user: str = "test_user"):
+    """
+    Save candidate-specific assessment details for a file to the intel_l103_candidacy table.
+
+    Parameters:
+      file_id (int): The ID of the file record.
+      candidate_id (int): The candidate ID associated with the assessment.
+      assessment (dict): A dictionary containing the candidate assessment details.
+      create_user (str): The user responsible for creating the record (default: "test_user").
+
+    Returns:
+      dict: A success message with the created candidacy ID.
+    """
+    conn = None
+    try:
+        conn = psycopg2.connect(DATABASE_URL)
+        with conn.cursor() as cur:
+            # Convert the assessment dict to JSON so it can be stored as a string.
+            assessment_json = json.dumps(assessment)
+            cur.execute("""
+                INSERT INTO intel_l103_candidacy (create_user, candidate_id, file_id, candidacy_result)
+                VALUES (%s, %s, %s, %s)
+                RETURNING candidacy_id;
+            """, (create_user, candidate_id, file_id, assessment_json))
+            candidacy_id = cur.fetchone()[0]
+        conn.commit()
+        return {"message": "Candidate assessment saved successfully.", "candidacy_id": candidacy_id}
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn:
+            conn.close()
+
+def get_candidate_assessment_from_markdown(file_id):
+    candidate_settings = get_candidate_settings_from_db()
+    file_details = get_file_details_service(file_id)
+    for cset in candidate_settings:
+        candidate_assessment = query_candidate_llm_tool(cset['candidate_id'], file_details['markdown_extract'])
+        save_result = save_candidate_assessment(file_id, cset['candidate_id'], candidate_assessment)
+        
 
 ###############################################################################
 # HELPER FUNCTIONS FOR UPLOAD SERVICE
@@ -161,7 +215,7 @@ def update_file_record(file_id, file_name, markdown_extract):
         conn = psycopg2.connect(DATABASE_URL)
         with conn.cursor() as cur:
             cur.execute("""
-                UPDATE intel_L100_files
+                UPDATE intel_l100_files
                 SET file_name = %s,
                     markdown_extract = %s,
                     metad_create_date = CURRENT_TIMESTAMP,
@@ -231,14 +285,73 @@ def scrape_metadata_service(file_id: int):
     markdown_extract = file_details["markdown_extract"]
     prompt = 'Return only JSON based on information contained withing this: '+markdown_extract
     scraped_data = query_llm_tool(prompt)
-
     update_file_record_scrape(file_id=file_id, scraped_data=scraped_data)
 
+def update_file_with_doc_id(file_id: int, doc_id: int):
+    """
+    Update the intel_l100_files record with the new doc_id.
     
+    Parameters:
+      file_id (int): The unique identifier of the file.
+      doc_id (int): The document ID returned from establish_document.
+    
+    Returns:
+      dict: A message confirming the update along with file_id and doc_id.
+    """
+    conn = None
+    try:
+        conn = psycopg2.connect(DATABASE_URL)
+        with conn.cursor() as cur:
+            cur.execute("""
+                UPDATE intel_l100_files
+                SET doc_id = %s,
+                    metad_edit_date = CURRENT_TIMESTAMP
+                WHERE file_id = %s;
+            """, (doc_id, file_id))
+        conn.commit()
+        return {"message": "File updated with new doc_id", "file_id": file_id, "doc_id": doc_id}
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn:
+            conn.close()
+
+def save_new_doc(file_id: int):
+    file_details = get_file_details_service(file_id)
+    conn = None
+    try:
+        conn = psycopg2.connect(DATABASE_URL)
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO intel_l101_docs (create_user, doc_name, doc_desc, doc_author, owner_group_id)
+                VALUES (%s, %s, %s, %s, %s)
+                RETURNING doc_id;
+            """, (file_details["create_user"], file_details["file_name"], file_details["file_description"], file_details["author"], 1))
+            doc_id = cur.fetchone()[0]
+        conn.commit()
+        return doc_id
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        raise e
+    finally:
+        if conn:
+            conn.close()
+            
+def establish_document(file_id: int):
+    """
+    Figure out if this file is part of a document series, or if it's the first.
+    Initially, make all of them a document.
+    """
+    doc_id = save_new_doc(file_id)
+    update_file_with_doc_id(file_id, doc_id)
+    return "success"
+  
 ###############################################################################
 # LLM SERVICE
 ###############################################################################
-
 
 def query_llm_service(prompt: Optional[str] = None, messages: Optional[List[dict]] = None):
     """
@@ -265,7 +378,6 @@ def query_llm_service(prompt: Optional[str] = None, messages: Optional[List[dict
     except requests.exceptions.RequestException as e:
         raise HTTPException(status_code=500, detail=f"LLM request failed: {str(e)}")
 
-
 def query_llm_tool(prompt: Optional[str] = None, messages: Optional[List[dict]] = None):
     """
     Send a request to your LLM backend and return structured JSON using tool calling.
@@ -283,7 +395,7 @@ def query_llm_tool(prompt: Optional[str] = None, messages: Optional[List[dict]] 
             "type": "function",
             "function": {
                 "name": "generate_document_metadata",
-                "description": "Generate structured metadata for a document.",
+                "description": "Generate structured metadata for a document. If values not availabe, use ''",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -332,7 +444,6 @@ def query_llm_tool(prompt: Optional[str] = None, messages: Optional[List[dict]] 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
 
-
 def get_llm_response_text(prompt: str) -> str:
     """
     Calls the query_llm_service with a given prompt and returns the text content.
@@ -353,6 +464,125 @@ def get_llm_response_text(prompt: str) -> str:
     return text_content or ""
 
 
+def get_candidate_setting_by_id(candidate_id: int):
+    """
+    Retrieve a single candidate setting record from the intel_l102_candidate_settings table for the specified candidate_id.
+    """
+    conn = None
+    try:
+        conn = psycopg2.connect(DATABASE_URL)
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        cur.execute(
+            "SELECT * FROM intel_l102_candidate_settings WHERE candidate_id = %s;",
+            (candidate_id,)
+        )
+        candidate_setting = cur.fetchone()
+        return candidate_setting
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error retrieving candidate setting: {str(e)}")
+    finally:
+        if conn:
+            conn.close()
+
+def query_candidate_llm_tool(candidate_id: int, markdown_text: str):
+    """
+    Query the LLM to generate candidate-specific metadata based on a markdown text.
+    
+    This function:
+      1. Retrieves the candidate settings for the given candidate_id.
+      2. Parses the candidate_fields column (assumed to be a comma-separated list) to build a dynamic
+         JSON schema of expected properties.
+      3. Constructs a dynamic tool call (mimicking the structure in your query_llm_tool function)
+         with a tool name 'generate_candidate_metadata'.
+      4. Uses the markdown_text as the prompt for the LLM.
+      5. Returns the parsed JSON metadata generated by the LLM.
+      
+    If the candidate setting is not found or has no candidate_fields defined, an error is raised.
+    """
+    # Retrieve candidate settings from the database.
+    candidate_setting = get_candidate_setting_by_id(candidate_id)
+    if not candidate_setting:
+        raise HTTPException(status_code=404, detail="Candidate setting not found")
+    
+    # Parse candidate_fields (e.g., "field1, field2, field3")
+    fields_str = candidate_setting.get("candidate_fields", "")
+    if not fields_str:
+        raise HTTPException(status_code=400, detail="Candidate fields not defined for candidate")
+    
+    fields_list = [field.strip() for field in fields_str.split(",") if field.strip()]
+    if not fields_list:
+        raise HTTPException(status_code=400, detail="No valid candidate fields found")
+    
+    # Dynamically build the JSON schema properties and required fields.
+    properties = {}
+    required_fields = []
+    for field in fields_list:
+        properties[field] = {
+            "type": "string",
+            "description": f"Extracted value for {field}"
+        }
+        required_fields.append(field)
+    
+    # Build the dynamic tool specification.
+    tools = [
+        {
+            "type": "function",
+            "function": {
+                "name": "generate_candidate_metadata",
+                "description": (
+                    f"Generate structured candidate metadata for candidate {candidate_setting.get('candidate_name', '')}. "
+                    "Return a JSON object with the following keys corresponding to the extracted data. "
+                    "If a value is not available, use an empty string."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": properties,
+                    "required": required_fields
+                }
+            }
+        }
+    ]
+    
+    # Prepare the final messages using the markdown_text as the prompt.
+    final_messages = [
+        {"role": "user", "content": markdown_text}
+    ]
+    
+    # Set up the request parameters.
+    headers = {
+        "Content-Type": "application/json",
+        "api-key": API_KEY
+    }
+    payload = {
+        "messages": final_messages,
+        "tools": tools,
+        "tool_choice": {
+            "type": "function",
+            "function": {"name": "generate_candidate_metadata"}
+        },
+        "max_tokens": 1000,
+        "temperature": 0.0  # Deterministic output for JSON parsing
+    }
+    
+    url_str = "https://dlpi-ai-api.openai.azure.com/openai/deployments/gpt-4o-mini/chat/completions?api-version=2025-01-01-preview"
+    
+    try:
+        response = requests.post(url_str, json=payload, headers=headers)
+        response.raise_for_status()
+        data = response.json()
+        
+        # Parse the JSON from the LLM's tool call output.
+        tool_calls = data["choices"][0]["message"].get("tool_calls", [])
+        if tool_calls:
+            function_args = tool_calls[0]["function"].get("arguments", "{}")
+            return json.loads(function_args)  # Return the structured JSON as a Python dict.
+        else:
+            raise HTTPException(status_code=500, detail="No tool call returned from model")
+    except requests.exceptions.RequestException as e:
+        raise HTTPException(status_code=500, detail=f"LLM request failed: {str(e)}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
+    
 ###############################################################################
 # DB EXPLORER SERVICES
 ###############################################################################

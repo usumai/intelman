@@ -60,6 +60,17 @@ async def upload_file(file: UploadFile = File(...)):
     return process_upload_service(file)
 
 # ---------------------------
+# CANDIDATES ENDPOINT
+# ---------------------------
+@router.post("/api/candidate/settings/", dependencies=[Depends(same_origin_only)])
+async def get_candidate_settings():
+    return get_candidate_settings_from_db()
+
+@router.post("/api/candidate/assess/{file_id}", dependencies=[Depends(same_origin_only)])
+async def get_candidate_assessment(file_id: int):
+    return get_candidate_assessment_from_markdown(file_id)
+
+# ---------------------------
 # LLM ENDPOINT
 # ---------------------------
 class LLMRequest(BaseModel):
@@ -73,6 +84,10 @@ def query_llm(data: LLMRequest):
 @router.post("/api/scrape/{fileId}", dependencies=[Depends(same_origin_only)])
 async def scrape_file(fileId: int):
     return scrape_metadata_service(fileId)
+
+@router.post("/api/document/{fileId}", dependencies=[Depends(same_origin_only)])
+async def create_document(fileId: int):
+    return establish_document(fileId)
 
 # ---------------------------
 # DB EXPLORER ENDPOINTS

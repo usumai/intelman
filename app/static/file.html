@@ -32,27 +32,42 @@
             <p><strong>Stored Filename:</strong> {{ file.file_name }}</p>
             <p><strong>Status:</strong> {{ file.status }}</p>
 
+            <hr><h4>Metadata</h4><hr>
+            <p><strong>Uploaded Filename:</strong> {{ file.uploaded_file_name }}</p>
+            <p><strong>Created:</strong> {{ file.metad_create_date }}</p>
+            <p><strong>Last Updated:</strong> {{ file.metad_edit_date }}</p>
+
             <hr><h4>
-                Internal document details
+                Internal details
                 <button class="btn btn-sm btn-outline-dark float-end"
                     @click="scrapeMetadata">Scrape</button>
 
             </h4><hr>
-            <p><strong>Description:</strong> {{ file.description }}</p>
             <p><strong>File Description:</strong> {{ file.file_description }}</p>
             <p><strong>Author:</strong> {{ file.author }}</p>
             <p><strong>Title:</strong> {{ file.title }}</p>
             <p><strong>Version:</strong> {{ file.version }}</p>
             
-            <hr><h4>Document</h4><hr>
+            <hr><h4>Document
+              <button class="btn btn-sm btn-outline-dark float-end"
+                  v-if="!file.doc_id"
+                  @click="get_establish_document">Documenter</button>
+            </h4><hr>
             <p><strong>Doc ID:</strong> {{ file.doc_id }}</p>
             <p><strong>Owner:</strong> {{ file.owner }}</p>
             <p><strong>Fingerprint:</strong> {{ file.fingerprint }}</p>
-            
-            <hr><h4>Metadata</h4><hr>
-            <p><strong>Uploaded Filename:</strong> {{ file.uploaded_file_name }}</p>
-            <p><strong>Created:</strong> {{ file.metad_create_date }}</p>
-            <p><strong>Last Updated:</strong> {{ file.metad_edit_date }}</p>
+
+            <hr><h4>
+              Candidacy
+              <button class="btn btn-sm btn-outline-dark float-end"
+                  @click="get_assess_candidacy">Assess</button>
+            </h4><hr>
+            <p v-for="candidate in json_candidate_settings">
+              <strong>{{ candidate.candidate_name }}</strong>
+              <br>{{ candidate.candidate_desc }}
+              <br>
+            </p>
+
         </div>
 
 
@@ -80,7 +95,8 @@
         return {
           fileId: 0,
           file: null,
-          error: ''
+          error: '',
+          json_candidate_settings:{},
         }
       },
       // The computed property uses markdown-it to parse the markdown_extract
@@ -131,7 +147,29 @@
             console.error(err);
             this.error = 'An error occurred while scraping metadata.';
           }
-        }
+        },
+        async get_establish_document(){
+              const response = await fetch(`/api/document/${this.fileId}`, {
+                method: 'POST',
+              });
+              const data = await response.json();
+              this.fetchFileDetails();
+        },
+        async get_candidate_settings(){
+              const response = await fetch(`/api/candidate/settings/`, {
+                method: 'POST',
+              });
+              this.json_candidate_settings = await response.json();
+              // this.json_candidate_settings = json.candidate_settings
+        },
+        async get_assess_candidacy(){
+              const response = await fetch(`/api/candidate/assess/${this.fileId}`, {
+                method: 'POST',
+              });
+              json = await response.json();
+        },
+        
+        
       },
       mounted() {
         // Parse file_id from the URL query parameters (e.g., file.html?file_id=1)
@@ -139,6 +177,7 @@
         this.fileId = urlParams.get('file_id');
         if (this.fileId) {
           this.fetchFileDetails();
+          this.get_candidate_settings();
         } else {
           this.error = 'No file ID specified in the URL.';
         }
