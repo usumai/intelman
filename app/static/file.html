@@ -67,7 +67,15 @@
               <br>{{ candidate.candidate_desc }}
               <br>
             </p>
+            <hr>
+            <p v-for="(can_res, index) in json_candidate_results" :key="index">
+              <template v-if="can_res && can_res.candidacy_result">
+                <pre>{{ JSON.parse(can_res.candidacy_result) }}</pre>
+              </template>
+              <br>
+            </p>
 
+            
         </div>
 
 
@@ -97,6 +105,7 @@
           file: null,
           error: '',
           json_candidate_settings:{},
+          json_candidate_results:{},
         }
       },
       // The computed property uses markdown-it to parse the markdown_extract
@@ -168,6 +177,14 @@
               });
               json = await response.json();
         },
+        async get_candidate_assessment_results(){
+              const response = await fetch(`/api/candidate/assessment_results/${this.fileId}`, {
+                method: 'POST',
+              });
+              this.json_candidate_results = await response.json();
+              
+        },
+
         
         
       },
@@ -178,6 +195,7 @@
         if (this.fileId) {
           this.fetchFileDetails();
           this.get_candidate_settings();
+          this.get_candidate_assessment_results()
         } else {
           this.error = 'No file ID specified in the URL.';
         }

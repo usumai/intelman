@@ -7,3 +7,4 @@ DATABASE_URL = os.environ.get('DATABASE_URL', f"sqlite:///{os.path.join(BASE_DIR
 # New entries for authentication.
 SECRET_KEY = "your_secret_key_here"  # Remember to use a secure key in production.
 ALGORITHM = "HS256"
+API_KEY = ""

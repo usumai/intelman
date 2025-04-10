@@ -168,7 +168,21 @@ def get_candidate_assessment_from_markdown(file_id):
     for cset in candidate_settings:
         candidate_assessment = query_candidate_llm_tool(cset['candidate_id'], file_details['markdown_extract'])
         save_result = save_candidate_assessment(file_id, cset['candidate_id'], candidate_assessment)
-        
+     
+def get_candidate_assessment_results(file_id):
+    conn = None
+    try:
+        conn = psycopg2.connect(DATABASE_URL)
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("SELECT * FROM intel_l103_candidacy WHERE file_id = %s AND delete_date IS NULL", (file_id,))
+            candidacy = cur.fetchall()
+            return candidacy   
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn:
+            conn.close()
 
 ###############################################################################
 # HELPER FUNCTIONS FOR UPLOAD SERVICE

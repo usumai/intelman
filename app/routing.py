@@ -70,6 +70,10 @@ async def get_candidate_settings():
 async def get_candidate_assessment(file_id: int):
     return get_candidate_assessment_from_markdown(file_id)
 
+@router.post("/api/candidate/assessment_results/{file_id}", dependencies=[Depends(same_origin_only)])
+async def get_candidate_assessment_res(file_id: int):
+    return get_candidate_assessment_results(file_id)
+
 # ---------------------------
 # LLM ENDPOINT
 # ---------------------------
