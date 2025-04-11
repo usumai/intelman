@@ -19,6 +19,42 @@
   <div class="container-fluid mt-5" id="dbExplorerApp">
     <h1>Database Explorer</h1>
     
+
+    <div class="mt-5">
+      <h2>Run SQL Query</h2>
+      <textarea 
+          v-model="sqlQuery" 
+          class="form-control" 
+          rows="4" 
+          placeholder="Enter your SQL query here..."></textarea>
+      <button class="btn btn-primary mt-2" @click="runSql">Run</button>
+      
+      <div v-if="sqlResult" class="mt-3">
+        <h3>Result:</h3>
+        <!-- Display SELECT results -->
+        <div v-if="sqlResult.columns && sqlResult.records">
+          <table class="table table-striped">
+            <thead>
+              <tr>
+                <th v-for="col in sqlResult.columns" :key="col">{{ col }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="(row, index) in sqlResult.records" :key="index">
+                <td v-for="col in sqlResult.columns" :key="col">{{ row[col] }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <!-- Display message for other queries -->
+        <div v-else>
+          <pre>{{ sqlResult.message }}</pre>
+        </div>
+      </div>
+    </div>
+
+
+
     <!-- Button to refresh table list -->
     <button class="btn btn-secondary mb-3" @click="fetchTables">Refresh Tables</button>
     
@@ -73,7 +109,9 @@
             columns: [],
             records: []
           },
-          error: ''
+          error: '',
+          sqlQuery: '',
+          sqlResult: null
         }
       },
       methods: {
@@ -113,6 +151,25 @@
               console.error(err);
               this.error = 'Error fetching table snapshot.';
             });
+        },
+        async runSql() {
+          this.error = '';
+          this.sqlResult = null;
+          try {
+            const response = await fetch('/api/dbexplorer/run_sql', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ query: this.sqlQuery })
+            });
+            const data = await response.json();
+            if (!response.ok) {
+              throw new Error(data.detail || "SQL query failed.");
+            }
+            this.sqlResult = data;
+          } catch (err) {
+            console.error(err);
+            this.error = 'Error running SQL query: ' + err.message;
+          }
         }
       },
       mounted() {

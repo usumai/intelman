@@ -1,4 +1,5 @@
-from fastapi import APIRouter, File, UploadFile, Depends, HTTPException, Response, Request, Form
+from fastapi import APIRouter, File, UploadFile, Depends, HTTPException, Response, Request, Form, Body
+
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 from typing import Optional, List
@@ -103,3 +104,16 @@ def list_tables():
 @router.get("/api/dbexplorer/table/{table_name}", dependencies=[Depends(same_origin_only)])
 def get_table_snapshot(table_name: str):
     return get_table_snapshot_service(table_name)
+
+class SQLQueryRequest(BaseModel):
+    query: str
+
+@router.post("/api/dbexplorer/run_sql", dependencies=[Depends(same_origin_only)])
+def run_sql_endpoint(sql_request: SQLQueryRequest = Body(...)):
+    """
+    Run an arbitrary SQL query on the database.
+    Expects a JSON body with a 'query' field.
+    """
+    if not sql_request.query:
+        raise HTTPException(status_code=400, detail="No SQL query provided.")
+    return run_sql_service(sql_request.query)

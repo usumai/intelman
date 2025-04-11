@@ -1,4 +1,4 @@
-CREATE TABLE IF NOT EXISTS intel_l100_files (
+CREATE TABLE IF NOT EXISTS intelman.intel_l100_files (
   file_id SERIAL PRIMARY KEY,
   create_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   create_user VARCHAR(50) NOT NULL,
@@ -7,7 +7,7 @@ CREATE TABLE IF NOT EXISTS intel_l100_files (
   uploaded_file_name VARCHAR(255) NOT NULL,
   file_name VARCHAR(255) NOT NULL,
   file_description TEXT,
-  doc_id INTEGER, -- This is a foreign key; update the reference if you have a series table
+  doc_id INTEGER, 
   fingerprint VARCHAR(255),
   metad_create_date TIMESTAMP,
   metad_edit_date TIMESTAMP,
@@ -17,8 +17,6 @@ CREATE TABLE IF NOT EXISTS intel_l100_files (
   author VARCHAR(255),
   owner VARCHAR(255),
   status VARCHAR(255)
-  -- Uncomment and adjust the next line if you have a referenced table for file_series:
-  --, FOREIGN KEY (file_series) REFERENCES file_series(file_series_id)
 );
 
 ---------------------------------------------------------------------------

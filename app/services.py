@@ -653,3 +653,35 @@ def get_table_snapshot_service(table_name: str):
     finally:
         if conn:
             conn.close()
+
+def run_sql_service(sql_query: str):
+    """
+    Execute a SQL query against the PostgreSQL database.
+    
+    For SELECT queries, fetch and return the result set.
+    For other queries, commit the changes and return a success message.
+
+    Parameters:
+      sql_query (str): The SQL query to execute.
+
+    Returns:
+      dict: The result as a dictionary containing either the fetched rows
+            with column names (for SELECT) or a success message.
+    """
+    conn = None
+    try:
+        conn = psycopg2.connect(DATABASE_URL)
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(sql_query)
+            if sql_query.strip().lower().startswith("select"):
+                columns = [desc.name for desc in cur.description] if cur.description else []
+                records = cur.fetchall()
+                return {"columns": columns, "records": records}
+            else:
+                conn.commit()
+                return {"message": "SQL query executed successfully."}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn:
+            conn.close()
